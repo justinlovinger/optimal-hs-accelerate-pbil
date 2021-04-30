@@ -1,5 +1,5 @@
 import (builtins.fetchGit {
   url = "https://github.com/NixOS/nixpkgs.git";
   ref = "nixos-unstable";
-  rev = "f217c0ea7c148ddc0103347051555c7c252dcafb";
+  rev = "8e4fe32876ca15e3d5eb3ecd3ca0b224417f5f17";
 })

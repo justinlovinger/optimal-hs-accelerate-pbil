@@ -1,4 +1,4 @@
-{ pkgs ? import ./pkgs.nix { }, compiler ? "ghc8103" }:
+{ pkgs ? import ./pkgs.nix { }, compiler ? "ghc8104" }:
 (pkgs.haskell.packages.${compiler}.override {
   overrides = with pkgs.haskell.lib; self: super: {
     sfc-random-accelerate = self.callCabal2nix "sfc-random-accelerate"

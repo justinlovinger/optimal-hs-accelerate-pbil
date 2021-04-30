@@ -20,7 +20,10 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/JustinLovinger/optimal-pbil#readme>
 
 dependencies:
+  - accelerate >= 1.3 && < 2
   - base >= 4.7 && < 5
+  - mwc-random-accelerate >= 0.2 && < 0.3
+  - sfc-random-accelerate >= 0.1 && < 0.2
 
 library:
   source-dirs: src
@@ -34,4 +37,7 @@ tests:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
+      - QuickCheck
+      - hspec
       - optimal-pbil
+      - random >= 1.1

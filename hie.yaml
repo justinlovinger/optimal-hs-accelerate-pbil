@@ -1,3 +1,6 @@
 cradle:
-  direct:
-    arguments: []
+  cabal:
+    - path: "./src"
+      component: "lib:optimal-pbil"
+    - path: "./test"
+      component: "test:optimal-pbil-test"
