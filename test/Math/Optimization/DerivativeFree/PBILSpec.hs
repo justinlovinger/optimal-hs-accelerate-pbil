@@ -14,7 +14,8 @@ import           Data.Bifunctor                 ( first )
 import           Data.Maybe                     ( fromJust )
 import           Data.Word                      ( Word64 )
 import           Math.Optimization.DerivativeFree.PBIL
-                                                ( State
+                                                ( ClampHyperparameters
+                                                , State
                                                 , clamp
                                                 , clampHyperparameters
                                                 , fromState
@@ -28,7 +29,15 @@ import           Test.Hspec                     ( Spec
 import           Test.QuickCheck                ( Arbitrary(..)
                                                 , choose
                                                 , property
+                                                , suchThatMap
                                                 )
+
+newtype ArbitraryClampHyperparameters a = ArbitraryClampHyperparameters (ClampHyperparameters a)
+
+instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ArbitraryClampHyperparameters a) where
+  arbitrary =
+    ArbitraryClampHyperparameters
+      <$> suchThatMap (choose (0, 1)) clampHyperparameters
 
 newtype ArbitraryClosedBounded01Num a = ArbitraryClosedBounded01Num a
   deriving (Eq, Ord, Show)
@@ -55,36 +64,31 @@ spec =
                   -- We can't use `0.1` for `lb`
                   -- because of floating point precision errors.
                   lb = (1 - 0.9)
-                  s =
-                    unsafeState'
-                      ( fmap fromArbC ps'
-                      , createWith' g'
-                      )
-                  (ps1, _) = fromState' $ clamp (fromJust $ clampHyperparameters ub) s
+                  s  = unsafeState' (fmap fromArbC ps', createWith' g')
+                  (ps1, _) =
+                    fromState' $ clamp (fromJust $ clampHyperparameters ub) s
                 in
                   all (betweenInc lb ub) ps1
           it "should return the same result for 1 - t"
             $ property
             $ \(ArbitraryClosedBounded01Num t) ps' g' ->
                 let
-                  s =
-                    unsafeState'
-                      ( fmap fromArbC ps'
-                      , createWith' g'
-                      )
-                  (psA, _) = fromState' $ clamp (fromJust $ clampHyperparameters t) s
-                  (psB, _) = fromState' $ clamp (fromJust $ clampHyperparameters $ 1 - t) s
+                  s = unsafeState' (fmap fromArbC ps', createWith' g')
+                  (psA, _) =
+                    fromState' $ clamp (fromJust $ clampHyperparameters t) s
+                  (psB, _) = fromState'
+                    $ clamp (fromJust $ clampHyperparameters $ 1 - t) s
                 in
                   psA == psB
           it "should not change probabilities if within threshold"
             $ property
             $ \ps' g' ->
-                let
-                  ps0 = fmap fromArbC ps'
-                  (ps1, _) =
-                    fromState' $ clamp (fromJust $ clampHyperparameters 1) $ unsafeState' (ps0, createWith' g')
-                in
-                  ps0 == ps1
+                let ps0 = fmap fromArbC ps'
+                    (ps1, _) =
+                      fromState'
+                        $ clamp (fromJust $ clampHyperparameters 1)
+                        $ unsafeState' (ps0, createWith' g')
+                in  ps0 == ps1
         -- describe "adjust" $ do
         --   it "should return a number bounded by a and b"
         --     $ property

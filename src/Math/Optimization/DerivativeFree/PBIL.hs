@@ -89,8 +89,7 @@ data StepHyperparameters a = StepHyperparameters
 -- | Return default 'StepHyperparameters'.
 defaultStepHyperparameters
   :: (A.Fractional a, A.Ord a) => StepHyperparameters a
-defaultStepHyperparameters =
-  StepHyperparameters 20 (ClosedBounded01Num 0.1)
+defaultStepHyperparameters = StepHyperparameters 20 (ClosedBounded01Num 0.1)
 
 -- | Return 'StepHyperparameters'.
 stepHyperparameters
@@ -99,8 +98,10 @@ stepHyperparameters
   -> a -- ^ Adjust rate, in range [0,1].
   -> Maybe (StepHyperparameters a)
 stepHyperparameters n r
-  | n <= 0    = Nothing
-  | otherwise = StepHyperparameters (A.constant n) . aConstantCB01N <$> closedBounded01Num r
+  | n <= 0
+  = Nothing
+  | otherwise
+  = StepHyperparameters (A.constant n) . aConstantCB01N <$> closedBounded01Num r
 
 -- | Take 1 step towards a 'State' with a higher objective value.
 -- by adjusting probabilities towards the best bits
@@ -184,12 +185,14 @@ mutate
   => MutateHyperparameters a
   -> State a
   -> State a
-mutate (MutateHyperparameters (ClosedBounded01Num mc) mar) (State (T2 ps g0)) = State $ T2
+mutate (MutateHyperparameters (ClosedBounded01Num mc) mar) (State (T2 ps g0)) =
+  State $ T2
   -- 'adjust' from a probability to a number in range 0 to 1
   -- will always be a valid probability,
   -- because 'adjust' will return a value between that range.
-  (A.zipWith3 (\r1 p r2 -> A.cond (r1 A.<= mc) (adjust mar p r2) p) rs1 ps rs2)
-  g2
+    (A.zipWith3 (\r1 p r2 -> A.cond (r1 A.<= mc) (adjust mar p r2) p) rs1 ps rs2
+    )
+    g2
  where
   (rs1, g1) = runRandom g0 randomVector
   (rs2, g2) = runRandom g1 randomVector
@@ -217,15 +220,18 @@ adjust (ClosedBounded01Num rate) a b = a + rate * (b - a)
 newtype ClampHyperparameters a = ClampHyperparameters (ClosedBounded01Num (Exp a))
 
 -- | Return default 'ClampHyperparameters'.
-defaultClampHyperparameters :: (Fractional a, Ord a, Elt a) => ClampHyperparameters a
-defaultClampHyperparameters = ClampHyperparameters $ ClosedBounded01Num $ A.constant 0.9
+defaultClampHyperparameters
+  :: (Fractional a, Ord a, Elt a) => ClampHyperparameters a
+defaultClampHyperparameters =
+  ClampHyperparameters $ ClosedBounded01Num $ A.constant 0.9
 
 -- | Return 'ClampHyperparameters'.
 clampHyperparameters
   :: (Fractional a, Ord a, A.Elt a)
   => a -- ^ Threshold, in range [0,1].
   -> Maybe (ClampHyperparameters a)
-clampHyperparameters = fmap (ClampHyperparameters . aConstantCB01N) . closedBounded01Num
+clampHyperparameters =
+  fmap (ClampHyperparameters . aConstantCB01N) . closedBounded01Num
 
 -- | Constrain probabilities
 -- bounded by given threshold.
@@ -236,7 +242,8 @@ clamp
   => ClampHyperparameters a -- ^ Threshold
   -> State a
   -> State a
-clamp (ClampHyperparameters (ClosedBounded01Num t)) (State (T2 ps g)) = State $ T2 (A.map (A.min ub . A.max lb) ps) g where
+clamp (ClampHyperparameters (ClosedBounded01Num t)) (State (T2 ps g)) =
+  State $ T2 (A.map (A.min ub . A.max lb) ps) g where
   lb = A.cond (t A.> 0.5) (1 - t) t
   ub = A.cond (t A.> 0.5) t (1 - t)
 
