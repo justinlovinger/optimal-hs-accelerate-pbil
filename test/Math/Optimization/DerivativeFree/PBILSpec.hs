@@ -17,6 +17,7 @@ import           Data.Word                      ( Word64 )
 import           Math.Optimization.DerivativeFree.PBIL
                                                 ( ClampHyperparameters
                                                 , State
+                                                , awhile
                                                 , clamp
                                                 , clampHyperparameters
                                                 , defaultStepHyperparameters
@@ -64,20 +65,12 @@ spec =
         describe "step" $ do
           it "should eventually improve objective value" $ do
             s0 <- initialState n -- TODO: replace with deterministic state
-            let
-              f  = sphere'
-              v0 = head . A.toList . A.run $ f $ finalize s0
-              vn =
-                head . A.toList . A.run $ f $ finalize $ unsafeState $ A.awhile
-                  ( A.unit
-                  . (A.<= A.constant v0)
-                  . A.the
-                  . f
-                  . finalize
-                  . unsafeState
-                  )
-                  (fromState . step defaultStepHyperparameters f . unsafeState)
-                  (fromState s0)
+            let f  = sphere'
+                v0 = head . A.toList . A.run $ f $ finalize s0
+                vn = head . A.toList . A.run $ f $ finalize $ awhile
+                  (A.unit . (A.<= A.constant v0) . A.the . f . finalize)
+                  (step defaultStepHyperparameters f)
+                  s0
             vn `shouldSatisfy` (> v0)
         describe "clamp" $ do
           it "should return probabilities bounded by threshold"

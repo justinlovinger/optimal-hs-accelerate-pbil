@@ -6,6 +6,7 @@ module Math.Optimization.DerivativeFree.PBIL
   , initialState
   , unsafeState
   , fromState
+  , awhile
   , StepHyperparameters
   , defaultStepHyperparameters
   , stepHyperparameters
@@ -80,6 +81,15 @@ unsafeState = State
 
 fromState :: (Elt a) => State a -> Acc (Vector a, Gen)
 fromState (State s) = s
+
+-- | Run Accelerate `awhile` with 'State'.
+awhile
+  :: (A.Elt a)
+  => (State a -> A.Acc (A.Scalar Bool))
+  -> (State a -> State a)
+  -> State a
+  -> State a
+awhile f g (State x) = State $ A.awhile (f . State) (fromState . g . State) x
 
 data StepHyperparameters a = StepHyperparameters
   { sampleSize :: Exp Int
