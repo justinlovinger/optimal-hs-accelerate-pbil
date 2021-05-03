@@ -17,11 +17,17 @@ import           Data.Word                      ( Word64 )
 import           Math.Optimization.DerivativeFree.PBIL
                                                 ( State
                                                 , StepHyperparameters
+                                                , awhile
                                                 , clamp
                                                 , clampHyperparameters
+                                                , converged
+                                                , defaultConvergedHyperparameters
+                                                , defaultMutateHyperparameters
+                                                , defaultStepHyperparameters
                                                 , finalize
                                                 , fromState
                                                 , initialState
+                                                , mutate
                                                 , step
                                                 , stepHyperparameters
                                                 , unsafeState
@@ -31,6 +37,7 @@ import           Test.Hspec                     ( Spec
                                                 , describe
                                                 , it
                                                 , shouldBe
+                                                , shouldSatisfy
                                                 )
 import           Test.QuickCheck                ( Arbitrary(..)
                                                 , applyArbitrary2
@@ -63,6 +70,21 @@ spec =
     $ describe "DerivativeFree"
     $ describe "PBIL"
     $ do
+        it "should be able to solve sphere problem" $ do
+          let f        = sphere'
+              t        = -0.01
+              optimize = do
+                s0 <- initialState n
+                let vn = head . A.toList . A.run $ f $ finalize $ awhile
+                      (A.map A.not . converged defaultConvergedHyperparameters)
+                      ( mutate (defaultMutateHyperparameters n)
+                      . step defaultStepHyperparameters f
+                      )
+                      s0
+                if vn > t then pure vn else optimize
+          vn <- optimize
+          vn `shouldSatisfy` (> t)
+
         describe "step" $ do
           it "should be able to improve objective value"
             -- For all step hypererparameters,

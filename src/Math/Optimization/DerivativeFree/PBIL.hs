@@ -19,6 +19,10 @@ module Math.Optimization.DerivativeFree.PBIL
   , defaultClampHyperparameters
   , clampHyperparameters
   , clamp
+  , ConvergedHyperparameters
+  , defaultConvergedHyperparameters
+  , convergedHyperparameters
+  , converged
   , finalize
   ) where
 
@@ -63,7 +67,7 @@ newtype State a = State (Acc (Vector a, Gen))
 
 -- | Return recommended initial state.
 initialState
-  :: Int -- ^ Number of bits in each sample
+  :: Int -- ^ number of bits in each sample
   -> IO (State Double)
 initialState nb = do
   g <- createWith . A.use <$> MWC.randomArray MWC.uniform sh
@@ -105,8 +109,8 @@ defaultStepHyperparameters = StepHyperparameters 20 (ClosedBounded01Num 0.1)
 -- | Return 'StepHyperparameters' if valid.
 stepHyperparameters
   :: (Fractional a, Ord a, A.Elt a)
-  => Int -- ^ Sample size, >= 2.
-  -> a -- ^ Adjust rate, in range [0,1].
+  => Int -- ^ sample size, >= 2
+  -> a -- ^ adjust rate, in range [0,1]
   -> Maybe (StepHyperparameters a)
 stepHyperparameters n r
   | n < 2
@@ -120,7 +124,7 @@ stepHyperparameters n r
 step
   :: (A.Num a, A.Ord a, Uniform a, A.Ord b)
   => StepHyperparameters a
-  -> (Acc (Vector Bool) -> Acc (Scalar b)) -- ^ Objective function. Maximize.
+  -> (Acc (Vector Bool) -> Acc (Scalar b)) -- ^ objective function, maximize
   -> State a
   -> State a
 step (StepHyperparameters n ar) f (State (T2 ps g0)) = State $ T2 ps' g1 where
@@ -171,7 +175,7 @@ data MutateHyperparameters a = MutateHyperparameters
 -- | Return default 'MutateHyperparameters'.
 defaultMutateHyperparameters
   :: (A.Fractional a, A.Ord a)
-  => Int -- ^ Number of bits in each sample
+  => Int -- ^ number of bits in each sample
   -> MutateHyperparameters a
 defaultMutateHyperparameters n = MutateHyperparameters
   (ClosedBounded01Num . f $ n)
@@ -183,8 +187,8 @@ defaultMutateHyperparameters n = MutateHyperparameters
 -- | Return 'MutateHyperparameters' if valid.
 mutateHyperparameters
   :: (Fractional a, Ord a, Elt a)
-  => a -- ^ Mutation chance, in range [0,1].
-  -> a -- ^ Mutation adjust rate, in range [0,1].
+  => a -- ^ mutation chance, in range [0,1]
+  -> a -- ^ mutation adjust rate, in range [0,1]
   -> Maybe (MutateHyperparameters a)
 mutateHyperparameters mc mar = do
   mc'  <- closedBounded01Num mc
@@ -213,9 +217,9 @@ mutate (MutateHyperparameters (ClosedBounded01Num mc) mar) (State (T2 ps g0)) =
 -- at given rate.
 adjustArray
   :: (Shape sh, A.Num a)
-  => ClosedBounded01Num (Exp a) -- ^ Adjustment rate
-  -> Acc (Array sh a) -- ^ From
-  -> Acc (Array sh a) -- ^ To
+  => ClosedBounded01Num (Exp a) -- ^ adjustment rate
+  -> Acc (Array sh a) -- ^ from
+  -> Acc (Array sh a) -- ^ to
   -> Acc (Array sh a)
 adjustArray rate = A.zipWith (adjust rate)
 
@@ -223,9 +227,9 @@ adjustArray rate = A.zipWith (adjust rate)
 -- at given rate.
 adjust
   :: (Num a)
-  => ClosedBounded01Num a  -- ^ Adjustment rate
-  -> a -- ^ From
-  -> a -- ^ To
+  => ClosedBounded01Num a  -- ^ adjustment rate
+  -> a -- ^ from
+  -> a -- ^ to
   -> a
 adjust (ClosedBounded01Num rate) a b = a + rate * (b - a)
 
@@ -241,7 +245,7 @@ defaultClampHyperparameters =
 -- | Return 'ClampHyperparameters' if valid.
 clampHyperparameters
   :: (Fractional a, Ord a, A.Elt a)
-  => a -- ^ Threshold, in range [0,1].
+  => a -- ^ threshold, in range [0,1]
   -> Maybe (ClampHyperparameters a)
 clampHyperparameters =
   fmap (ClampHyperparameters . aConstantCB01N) . closedBounded01Num
@@ -251,15 +255,41 @@ clampHyperparameters =
 -- Threshold squeezes towards the center,
 -- 0.5 .
 clamp
-  :: (A.Fractional a, A.Ord a)
-  => ClampHyperparameters a -- ^ Threshold
-  -> State a
-  -> State a
+  :: (A.Fractional a, A.Ord a) => ClampHyperparameters a -> State a -> State a
 clamp (ClampHyperparameters (ClosedBounded01Num t)) (State (T2 ps g)) =
   State $ T2 (A.map (A.min ub . A.max lb) ps) g where
   lb = A.cond (t A.> 0.5) (1 - t) t
   ub = A.cond (t A.> 0.5) t (1 - t)
 
--- | Finalize 'State' probabilities into 'Bits'.
+newtype ConvergedHyperparameters a = ConvergedHyperparameters (Exp a)
+  deriving (Show)
+
+-- | Return default 'ConvergedHyperparameters'.
+defaultConvergedHyperparameters
+  :: (Fractional a, Ord a, Elt a) => ConvergedHyperparameters a
+defaultConvergedHyperparameters = ConvergedHyperparameters $ A.constant 0.75
+
+-- | Return 'ConvergedHyperparameters' if valid.
+convergedHyperparameters
+  :: (Fractional a, Ord a, A.Elt a)
+  => a -- ^ threshold, in range (0.5,1)
+  -> Maybe (ConvergedHyperparameters a)
+convergedHyperparameters t
+  | t <= 0.5  = Nothing
+  | t >= 1.0  = Nothing
+  | otherwise = Just $ ConvergedHyperparameters $ A.constant t
+
+-- | Has 'State' converged?
+converged
+  :: (A.Fractional a, A.Ord a)
+  => ConvergedHyperparameters a
+  -> State a
+  -> A.Acc (A.Scalar Bool)
+converged (ConvergedHyperparameters ub) (State (T2 ps _)) = A.all
+  (\x -> x A.< lb A.|| x A.> ub)
+  ps
+  where lb = 1 - ub
+
+-- | Finalize 'State' probabilities into bits.
 finalize :: (A.Fractional a, A.Ord a) => State a -> Acc (Vector Bool)
 finalize (State (T2 ps _)) = A.map (A.>= 0.5) ps
