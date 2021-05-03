@@ -95,13 +95,14 @@ data StepHyperparameters a = StepHyperparameters
   { sampleSize :: Exp Int
   , adjustRate :: ClosedBounded01Num (Exp a)
   }
+  deriving Show
 
 -- | Return default 'StepHyperparameters'.
 defaultStepHyperparameters
   :: (A.Fractional a, A.Ord a) => StepHyperparameters a
 defaultStepHyperparameters = StepHyperparameters 20 (ClosedBounded01Num 0.1)
 
--- | Return 'StepHyperparameters'.
+-- | Return 'StepHyperparameters' if valid.
 stepHyperparameters
   :: (Fractional a, Ord a, A.Elt a)
   => Int -- ^ Sample size, >= 2.
@@ -165,6 +166,7 @@ data MutateHyperparameters a = MutateHyperparameters
   { mutationChance     :: Probability (Exp a)
   , mutationAdjustRate :: ClosedBounded01Num (Exp a)
   }
+  deriving Show
 
 -- | Return default 'MutateHyperparameters'.
 defaultMutateHyperparameters
@@ -178,7 +180,7 @@ defaultMutateHyperparameters n = MutateHyperparameters
   f 0 = 1
   f x = 1 / fromIntegral x
 
--- | Return 'MutateHyperparameters'.
+-- | Return 'MutateHyperparameters' if valid.
 mutateHyperparameters
   :: (Fractional a, Ord a, Elt a)
   => a -- ^ Mutation chance, in range [0,1].
@@ -228,6 +230,7 @@ adjust
 adjust (ClosedBounded01Num rate) a b = a + rate * (b - a)
 
 newtype ClampHyperparameters a = ClampHyperparameters (ClosedBounded01Num (Exp a))
+  deriving (Show)
 
 -- | Return default 'ClampHyperparameters'.
 defaultClampHyperparameters
@@ -235,7 +238,7 @@ defaultClampHyperparameters
 defaultClampHyperparameters =
   ClampHyperparameters $ ClosedBounded01Num $ A.constant 0.9
 
--- | Return 'ClampHyperparameters'.
+-- | Return 'ClampHyperparameters' if valid.
 clampHyperparameters
   :: (Fractional a, Ord a, A.Elt a)
   => a -- ^ Threshold, in range [0,1].

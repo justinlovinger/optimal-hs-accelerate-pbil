@@ -17,13 +17,14 @@ import           Data.Word                      ( Word64 )
 import           Math.Optimization.DerivativeFree.PBIL
                                                 ( ClampHyperparameters
                                                 , State
+                                                , StepHyperparameters
                                                 , clamp
                                                 , clampHyperparameters
-                                                , defaultStepHyperparameters
                                                 , finalize
                                                 , fromState
                                                 , initialState
                                                 , step
+                                                , stepHyperparameters
                                                 , unsafeState
                                                 )
 import           System.Random                  ( Random )
@@ -33,10 +34,19 @@ import           Test.Hspec                     ( Spec
                                                 , shouldBe
                                                 )
 import           Test.QuickCheck                ( Arbitrary(..)
+                                                , applyArbitrary2
                                                 , choose
                                                 , property
                                                 , suchThatMap
                                                 )
+
+newtype ArbitraryStepHyperparameters a = ArbitraryStepHyperparameters (StepHyperparameters a)
+  deriving (Show)
+
+instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ArbitraryStepHyperparameters a) where
+  arbitrary = ArbitraryStepHyperparameters <$> suchThatMap
+    (applyArbitrary2 (\x (ArbitraryClosedBounded01Num y) -> (x, y)))
+    (uncurry stepHyperparameters)
 
 newtype ArbitraryClampHyperparameters a = ArbitraryClampHyperparameters (ClampHyperparameters a)
 
@@ -62,20 +72,23 @@ spec =
     $ describe "PBIL"
     $ do
         describe "step" $ do
-          it "should be able to improve objective value" $ do
-            let
-              oneStep = do
-                s0 <- initialState n
+          it "should be able to improve objective value"
+            -- For all step hypererparameters,
+            -- there exists an inital state
+            -- such that 1 step
+            -- improves objective value.
+            $ property
+            $ \(ArbitraryStepHyperparameters h) -> do
                 let
-                  f  = sphere'
-                  v0 = head . A.toList . A.run $ f $ finalize s0
-                  v1 = head . A.toList . A.run $ f $ finalize $ step
-                    defaultStepHyperparameters
-                    f
-                    s0
-                if v1 > v0 then pure True else oneStep
-            done <- oneStep
-            done `shouldBe` True
+                  f       = sphere'
+                  oneStep = do
+                    s0 <- initialState n
+                    let v0 = head . A.toList . A.run $ f $ finalize s0
+                        v1 =
+                          head . A.toList . A.run $ f $ finalize $ step h f s0
+                    if v1 > v0 then pure True else oneStep
+                done <- oneStep
+                done `shouldBe` True
         describe "clamp" $ do
           it "should return probabilities bounded by threshold"
             $ property
