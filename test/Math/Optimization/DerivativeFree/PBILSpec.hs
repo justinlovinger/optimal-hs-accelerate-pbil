@@ -17,7 +17,6 @@ import           Data.Word                      ( Word64 )
 import           Math.Optimization.DerivativeFree.PBIL
                                                 ( ClampHyperparameters
                                                 , State
-                                                , awhile
                                                 , clamp
                                                 , clampHyperparameters
                                                 , defaultStepHyperparameters
@@ -31,7 +30,7 @@ import           System.Random                  ( Random )
 import           Test.Hspec                     ( Spec
                                                 , describe
                                                 , it
-                                                , shouldSatisfy
+                                                , shouldBe
                                                 )
 import           Test.QuickCheck                ( Arbitrary(..)
                                                 , choose
@@ -63,15 +62,20 @@ spec =
     $ describe "PBIL"
     $ do
         describe "step" $ do
-          it "should eventually improve objective value" $ do
-            s0 <- initialState n -- TODO: replace with deterministic state
-            let f  = sphere'
-                v0 = head . A.toList . A.run $ f $ finalize s0
-                vn = head . A.toList . A.run $ f $ finalize $ awhile
-                  (A.unit . (A.<= A.constant v0) . A.the . f . finalize)
-                  (step defaultStepHyperparameters f)
-                  s0
-            vn `shouldSatisfy` (> v0)
+          it "should be able to improve objective value" $ do
+            let
+              oneStep = do
+                s0 <- initialState n
+                let
+                  f  = sphere'
+                  v0 = head . A.toList . A.run $ f $ finalize s0
+                  v1 = head . A.toList . A.run $ f $ finalize $ step
+                    defaultStepHyperparameters
+                    f
+                    s0
+                if v1 > v0 then pure True else oneStep
+            done <- oneStep
+            done `shouldBe` True
         describe "clamp" $ do
           it "should return probabilities bounded by threshold"
             $ property
