@@ -1,10 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
 
-module Math.Optimization.DerivativeFree.PBILSpec where
+module Math.Optimization.DerivativeFree.PBILSpec
+  ( spec
+  ) where
 
-import           Data.Array.Accelerate          ( (:.)(..)
-                                                , Z(Z)
-                                                )
 import qualified Data.Array.Accelerate         as A
 import qualified Data.Array.Accelerate.Interpreter
                                                as A
@@ -18,13 +19,18 @@ import           Math.Optimization.DerivativeFree.PBIL
                                                 , State
                                                 , clamp
                                                 , clampHyperparameters
+                                                , defaultStepHyperparameters
+                                                , finalize
                                                 , fromState
+                                                , initialState
+                                                , step
                                                 , unsafeState
                                                 )
 import           System.Random                  ( Random )
 import           Test.Hspec                     ( Spec
                                                 , describe
                                                 , it
+                                                , shouldSatisfy
                                                 )
 import           Test.QuickCheck                ( Arbitrary(..)
                                                 , choose
@@ -55,6 +61,24 @@ spec =
     $ describe "DerivativeFree"
     $ describe "PBIL"
     $ do
+        describe "step" $ do
+          it "should eventually improve objective value" $ do
+            s0 <- initialState n -- TODO: replace with deterministic state
+            let
+              f  = sphere'
+              v0 = head . A.toList . A.run $ f $ finalize s0
+              vn =
+                head . A.toList . A.run $ f $ finalize $ unsafeState $ A.awhile
+                  ( A.unit
+                  . (A.<= A.constant v0)
+                  . A.the
+                  . f
+                  . finalize
+                  . unsafeState
+                  )
+                  (fromState . step defaultStepHyperparameters f . unsafeState)
+                  (fromState s0)
+            vn `shouldSatisfy` (> v0)
         describe "clamp" $ do
           it "should return probabilities bounded by threshold"
             $ property
@@ -99,13 +123,77 @@ spec =
 
 createWith' :: [(Word64, Word64, Word64)] -> SFC.Gen
 createWith' xs =
-  A.run $ SFC.createWith $ A.use $ A.fromList (Z :. length xs) xs
+  A.run $ SFC.createWith $ A.use $ A.fromList (A.Z A.:. length xs) xs
 
 unsafeState' :: ([Double], SFC.Gen) -> State Double
-unsafeState' (ps, g) = unsafeState $ A.use (A.fromList (Z :. length ps) ps, g)
+unsafeState' (ps, g) =
+  unsafeState $ A.use (A.fromList (A.Z A.:. length ps) ps, g)
 
 fromState' :: State Double -> ([Double], SFC.Gen)
 fromState' = first A.toList . A.run . fromState
 
 betweenInc :: Ord a => a -> a -> a -> Bool
 betweenInc lb ub x = x >= lb && x <= ub
+
+sphere' :: A.Acc (A.Vector Bool) -> A.Acc (A.Scalar Double)
+sphere' = A.map A.negate . sphere . fromBits (-5) 5 . A.reshape
+  (A.constant $ A.Z A.:. d A.:. bpd)
+
+n :: Int
+n = d * bpd
+
+d :: Int
+d = 2
+
+bpd :: Int
+bpd = 8
+
+sphere :: (A.Num a) => A.Acc (A.Vector a) -> A.Acc (A.Scalar a)
+sphere = A.sum . A.map (^ (2 :: Int))
+
+-- | Reduce innermost dimension
+-- to numbers within lower and upper bound
+-- from bits.
+fromBits
+  :: (A.Shape sh, A.Fractional a)
+  => A.Exp a -- ^ Lower bound
+  -> A.Exp a -- ^ Upper bound
+  -> A.Acc (A.Array (sh A.:. Int) Bool)
+  -> A.Acc (A.Array sh a)
+-- Guard on 0 bits
+-- to avoid division by 0.
+fromBits lb ub bs = A.acond (nb A.== 0)
+                            (A.fill (A.indexTail sh) lb)
+                            ((a *! fromBits' bs) !+ lb)
+ where
+  a  = (ub - lb) / (2 A.^ nb - 1) -- range / max int
+  nb = A.indexHead sh
+  sh = A.shape bs
+
+-- | Reduce innermost dimension
+-- to base 10 integer representations of bits.
+-- Leftmost bit is least significant.
+fromBits'
+  :: (A.Shape sh, A.Num a)
+  => A.Acc (A.Array (sh A.:. Int) Bool)
+  -> A.Acc (A.Array sh a)
+fromBits' = A.sum . A.imap (\i x -> fromBool x * 2 A.^ A.indexHead i)
+
+fromBool :: (A.Num a) => A.Exp Bool -> A.Exp a
+fromBool x = A.cond x 1 0
+
+-- | Add scalar to each element of an array.
+(!+)
+  :: (A.Shape sh, A.Num a)
+  => A.Acc (A.Array sh a)
+  -> A.Exp a
+  -> A.Acc (A.Array sh a)
+(!+) a x = A.map (+ x) a
+
+-- | Multiply scalar by each element of an array.
+(*!)
+  :: (A.Shape sh, A.Num a)
+  => A.Exp a
+  -> A.Acc (A.Array sh a)
+  -> A.Acc (A.Array sh a)
+(*!) x = A.map (x *)

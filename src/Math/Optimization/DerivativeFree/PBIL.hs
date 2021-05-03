@@ -94,11 +94,11 @@ defaultStepHyperparameters = StepHyperparameters 20 (ClosedBounded01Num 0.1)
 -- | Return 'StepHyperparameters'.
 stepHyperparameters
   :: (Fractional a, Ord a, A.Elt a)
-  => Int -- ^ Sample size, > 0.
+  => Int -- ^ Sample size, >= 2.
   -> a -- ^ Adjust rate, in range [0,1].
   -> Maybe (StepHyperparameters a)
 stepHyperparameters n r
-  | n <= 0
+  | n < 2
   = Nothing
   | otherwise
   = StepHyperparameters (A.constant n) . aConstantCB01N <$> closedBounded01Num r
