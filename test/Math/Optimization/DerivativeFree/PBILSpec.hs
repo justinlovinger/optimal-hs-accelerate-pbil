@@ -15,8 +15,7 @@ import           Data.Bifunctor                 ( first )
 import           Data.Maybe                     ( fromJust )
 import           Data.Word                      ( Word64 )
 import           Math.Optimization.DerivativeFree.PBIL
-                                                ( ClampHyperparameters
-                                                , State
+                                                ( State
                                                 , StepHyperparameters
                                                 , clamp
                                                 , clampHyperparameters
@@ -47,13 +46,6 @@ instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ArbitraryStepHyp
   arbitrary = ArbitraryStepHyperparameters <$> suchThatMap
     (applyArbitrary2 (\x (ArbitraryClosedBounded01Num y) -> (x, y)))
     (uncurry stepHyperparameters)
-
-newtype ArbitraryClampHyperparameters a = ArbitraryClampHyperparameters (ClampHyperparameters a)
-
-instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ArbitraryClampHyperparameters a) where
-  arbitrary =
-    ArbitraryClampHyperparameters
-      <$> suchThatMap (choose (0, 1)) clampHyperparameters
 
 newtype ArbitraryClosedBounded01Num a = ArbitraryClosedBounded01Num a
   deriving (Eq, Ord, Show)
@@ -94,6 +86,8 @@ spec =
             $ property
             $ \ps' g' ->
                 let
+                  -- Arbitrary upper bound can fail
+                  -- because of floating point precision errors.
                   ub = 0.9
                   -- We can't use `0.1` for `lb`
                   -- because of floating point precision errors.
