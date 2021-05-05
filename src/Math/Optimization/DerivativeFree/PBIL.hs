@@ -4,6 +4,7 @@
 module Math.Optimization.DerivativeFree.PBIL
   ( State
   , initialState
+  , state
   , unsafeState
   , fromState
   , awhile
@@ -40,6 +41,8 @@ import           Data.Array.Accelerate          ( (:.)(..)
                                                 , Z(Z)
                                                 )
 import qualified Data.Array.Accelerate         as A
+import qualified Data.Array.Accelerate.Interpreter
+                                               as AI
 import qualified Data.Array.Accelerate.System.Random.MWC
                                                as MWC
 import           Data.Array.Accelerate.System.Random.SFC
@@ -64,8 +67,9 @@ aConstantCB01N :: (Elt a) => ClosedBounded01Num a -> ClosedBounded01Num (Exp a)
 aConstantCB01N (ClosedBounded01Num x) = ClosedBounded01Num $ A.constant x
 
 newtype State a = State (Acc (Vector a, Gen))
+  deriving (Show)
 
--- | Return recommended initial state.
+-- | Return recommended initial 'State'.
 initialState
   :: Int -- ^ number of bits in each sample
   -> IO (State Double)
@@ -74,7 +78,21 @@ initialState nb = do
   pure $ State $ T2 (A.fill (A.constant sh) $ A.constant 0.5) g
   where sh = Z :. nb
 
--- | Return state without safety checking.
+-- | Return 'State' if valid.
+state
+  :: (A.Fractional a, A.Ord a)
+  => A.Vector a -- ^ probabilities, values in range [0,1]
+  -> A.Vector (A.Word64, A.Word64, A.Word64) -- ^ seed, same length as probabilities
+  -> Maybe (State a)
+state ps g
+  | A.arrayShape ps /= A.arrayShape g
+  = Nothing
+  | head $ A.toList $ AI.run $ A.any (\x -> x A.< 0 A.|| x A.> 1) $ A.use ps
+  = Nothing
+  | otherwise
+  = Just $ State $ T2 (A.use ps) (createWith $ A.use g)
+
+-- | Return 'State' without safety checking.
 -- Probabilities must be in range [0,1].
 -- Random generator must have same shape as probabilities.
 unsafeState

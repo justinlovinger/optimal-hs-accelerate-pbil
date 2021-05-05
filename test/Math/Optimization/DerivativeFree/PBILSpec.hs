@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Math.Optimization.DerivativeFree.PBILSpec
   ( spec
@@ -15,7 +16,8 @@ import           Data.Bifunctor                 ( first )
 import           Data.Maybe                     ( fromJust )
 import           Data.Word                      ( Word64 )
 import           Math.Optimization.DerivativeFree.PBIL
-                                                ( State
+                                                ( MutateHyperparameters
+                                                , State
                                                 , StepHyperparameters
                                                 , awhile
                                                 , clamp
@@ -28,6 +30,8 @@ import           Math.Optimization.DerivativeFree.PBIL
                                                 , fromState
                                                 , initialState
                                                 , mutate
+                                                , mutateHyperparameters
+                                                , state
                                                 , step
                                                 , stepHyperparameters
                                                 , unsafeState
@@ -42,9 +46,22 @@ import           Test.Hspec                     ( Spec
 import           Test.QuickCheck                ( Arbitrary(..)
                                                 , applyArbitrary2
                                                 , choose
+                                                , chooseInt
+                                                , infiniteListOf
                                                 , property
                                                 , suchThatMap
                                                 )
+
+newtype ArbitraryState a = ArbitraryState (State a)
+  deriving (Show)
+
+instance (Num a, Ord a, Random a, A.Fractional a, A.Ord a) => Arbitrary (ArbitraryState a) where
+  arbitrary = ArbitraryState <$> suchThatMap arbStateTuple (uncurry state)   where
+    arbStateTuple = do
+      n  <- chooseInt (0, 100)
+      ps <- fmap fromArbC . take n <$> infiniteListOf arbitrary
+      g  <- take n <$> infiniteListOf arbitrary
+      pure (A.fromList (A.Z A.:. n) ps, A.fromList (A.Z A.:. n) g)
 
 newtype ArbitraryStepHyperparameters a = ArbitraryStepHyperparameters (StepHyperparameters a)
   deriving (Show)
@@ -53,6 +70,18 @@ instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ArbitraryStepHyp
   arbitrary = ArbitraryStepHyperparameters <$> suchThatMap
     (applyArbitrary2 (\x (ArbitraryClosedBounded01Num y) -> (x, y)))
     (uncurry stepHyperparameters)
+
+newtype ArbitraryMutateHyperparameters a = ArbitraryMutateHyperparameters (MutateHyperparameters a)
+  deriving (Show)
+
+instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ArbitraryMutateHyperparameters a) where
+  arbitrary = ArbitraryMutateHyperparameters <$> suchThatMap
+    (applyArbitrary2
+      (\(ArbitraryClosedBounded01Num x) (ArbitraryClosedBounded01Num y) ->
+        (x, y)
+      )
+    )
+    (uncurry mutateHyperparameters)
 
 newtype ArbitraryClosedBounded01Num a = ArbitraryClosedBounded01Num a
   deriving (Eq, Ord, Show)
@@ -74,10 +103,10 @@ spec =
           let f        = sphere'
               t        = -0.01
               optimize = do
-                s0 <- initialState n
+                s0 <- initialState sphereN
                 let vn = head . A.toList . A.run $ f $ finalize $ awhile
                       (A.map A.not . converged defaultConvergedHyperparameters)
-                      ( mutate (defaultMutateHyperparameters n)
+                      ( mutate (defaultMutateHyperparameters sphereN)
                       . step defaultStepHyperparameters f
                       )
                       s0
@@ -96,13 +125,22 @@ spec =
                 let
                   f       = sphere'
                   oneStep = do
-                    s0 <- initialState n
+                    s0 <- initialState sphereN
                     let v0 = head . A.toList . A.run $ f $ finalize s0
                         v1 =
                           head . A.toList . A.run $ f $ finalize $ step h f s0
                     if v1 > v0 then pure True else oneStep
                 done <- oneStep
                 done `shouldBe` True
+
+        describe "mutate" $ do
+          it "should not change length of probabilities"
+            $ property
+            $ \(ArbitraryMutateHyperparameters h) (ArbitraryState (s :: State
+                  Double)) ->
+                let length' = length . A.toList . fst . A.run . fromState
+                in  length' s `shouldBe` length' (mutate h s)
+
         describe "clamp" $ do
           it "should return probabilities bounded by threshold"
             $ property
@@ -163,16 +201,16 @@ betweenInc lb ub x = x >= lb && x <= ub
 
 sphere' :: A.Acc (A.Vector Bool) -> A.Acc (A.Scalar Double)
 sphere' = A.map A.negate . sphere . fromBits (-5) 5 . A.reshape
-  (A.constant $ A.Z A.:. d A.:. bpd)
+  (A.constant $ A.Z A.:. sphereD A.:. sphereBPD)
 
-n :: Int
-n = d * bpd
+sphereN :: Int
+sphereN = sphereD * sphereBPD
 
-d :: Int
-d = 2
+sphereD :: Int
+sphereD = 2
 
-bpd :: Int
-bpd = 8
+sphereBPD :: Int
+sphereBPD = 8
 
 sphere :: (A.Num a) => A.Acc (A.Vector a) -> A.Acc (A.Scalar a)
 sphere = A.sum . A.map (^ (2 :: Int))
