@@ -16,10 +16,6 @@ module Math.Optimization.DerivativeFree.PBIL
   , defaultMutateHyperparameters
   , mutateHyperparameters
   , mutate
-  , ClampHyperparameters
-  , defaultClampHyperparameters
-  , clampHyperparameters
-  , clamp
   , ConvergedHyperparameters
   , defaultConvergedHyperparameters
   , convergedHyperparameters
@@ -251,30 +247,6 @@ adjust
   -> a
 adjust (ClosedBounded01Num rate) a b = a + rate * (b - a)
 
-newtype ClampHyperparameters a = ClampHyperparameters (Exp a)
-  deriving (Show)
-
--- | Return default 'ClampHyperparameters'.
-defaultClampHyperparameters
-  :: (Fractional a, Ord a, Elt a) => ClampHyperparameters a
-defaultClampHyperparameters = ClampHyperparameters $ A.constant 0.9
-
--- | Return 'ClampHyperparameters' if valid.
-clampHyperparameters
-  :: (Fractional a, Ord a, A.Elt a)
-  => a -- ^ threshold, in range (0.5,1)
-  -> Maybe (ClampHyperparameters a)
-clampHyperparameters = fmap (ClampHyperparameters . A.constant) . upper01Num
-
--- | Constrain probabilities
--- bounded by given threshold.
--- Threshold squeezes towards the center,
--- 0.5 .
-clamp
-  :: (A.Fractional a, A.Ord a) => ClampHyperparameters a -> State a -> State a
-clamp (ClampHyperparameters t) (State (T2 ps g)) =
-  State $ T2 (A.map (A.min t . A.max (1 - t)) ps) g
-
 newtype ConvergedHyperparameters a = ConvergedHyperparameters (Exp a)
   deriving (Show)
 
@@ -288,13 +260,10 @@ convergedHyperparameters
   :: (Fractional a, Ord a, A.Elt a)
   => a -- ^ threshold, in range (0.5,1)
   -> Maybe (ConvergedHyperparameters a)
-convergedHyperparameters =
-  fmap (ConvergedHyperparameters . A.constant) . upper01Num
-
-upper01Num :: (Fractional a, Ord a) => a -> Maybe a
-upper01Num x | x <= 0.5  = Nothing
-             | x >= 1.0  = Nothing
-             | otherwise = Just x
+convergedHyperparameters t
+  | t <= 0.5  = Nothing
+  | t >= 1.0  = Nothing
+  | otherwise = Just $ ConvergedHyperparameters $ A.constant t
 
 -- | Has 'State' converged?
 converged

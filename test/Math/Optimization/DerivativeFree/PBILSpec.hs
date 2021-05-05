@@ -11,18 +11,11 @@ module Math.Optimization.DerivativeFree.PBILSpec
 import qualified Data.Array.Accelerate         as A
 import qualified Data.Array.Accelerate.Interpreter
                                                as A
-import qualified Data.Array.Accelerate.System.Random.SFC
-                                               as SFC
-import           Data.Bifunctor                 ( first )
-import           Data.Maybe                     ( fromJust )
 import           Math.Optimization.DerivativeFree.PBIL
-                                                ( ClampHyperparameters
-                                                , MutateHyperparameters
+                                                ( MutateHyperparameters
                                                 , State
                                                 , StepHyperparameters
                                                 , awhile
-                                                , clamp
-                                                , clampHyperparameters
                                                 , converged
                                                 , defaultConvergedHyperparameters
                                                 , defaultMutateHyperparameters
@@ -74,9 +67,6 @@ zipGen x y = do
   b <- y
   pure (a, b)
 
-instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ClampHyperparameters a) where
-  arbitrary = suchThatMap (choose (0.5000001, 0.9999999)) clampHyperparameters
-
 spec :: Spec
 spec =
   describe "Math"
@@ -125,38 +115,12 @@ spec =
                 let length' = length . A.toList . fst . A.run . fromState
                 in  length' s `shouldBe` length' (mutate h s)
 
-        describe "clamp" $ do
-          it "should return probabilities bounded by threshold"
-            $ property
-            $ \s ->
-                let
-                  -- Arbitrary upper bound can fail
-                  -- because of floating point precision errors.
-                  ub = 0.9
-                  -- We can't use `0.1` for `lb`
-                  -- because of floating point precision errors.
-                  lb = (1 - 0.9)
-                  (ps1, _) =
-                    fromState' $ clamp (fromJust $ clampHyperparameters ub) s
-                in
-                  all (betweenInc lb ub) ps1
-          it "should be idempotent" $ property $ \h (s :: State Double) ->
-            -- Note: `Gen` from `State` cannot be checked for equality.
-            fst (A.run $ fromState $ clamp h s)
-              `shouldBe` fst (A.run $ fromState $ clamp h $ clamp h s)
-
         -- describe "adjust" $ do
         --   it "should return a number bounded by a and b"
         --     $ property
         --     $ \rate' (a :: Double) b ->
         --         let rate = fromArbC rate'
         --         in  betweenInc (min a b) (max a b) (adjust rate a b)
-
-fromState' :: State Double -> ([Double], SFC.Gen)
-fromState' = first A.toList . A.run . fromState
-
-betweenInc :: Ord a => a -> a -> a -> Bool
-betweenInc lb ub x = x >= lb && x <= ub
 
 sphere' :: A.Acc (A.Vector Bool) -> A.Acc (A.Scalar Double)
 sphere' = A.map A.negate . sphere . fromBits (-5) 5 . A.reshape
