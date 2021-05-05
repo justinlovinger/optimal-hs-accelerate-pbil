@@ -15,7 +15,6 @@ import qualified Data.Array.Accelerate.System.Random.SFC
                                                as SFC
 import           Data.Bifunctor                 ( first )
 import           Data.Maybe                     ( fromJust )
-import           Data.Word                      ( Word64 )
 import           Math.Optimization.DerivativeFree.PBIL
                                                 ( MutateHyperparameters
                                                 , State
@@ -35,7 +34,6 @@ import           Math.Optimization.DerivativeFree.PBIL
                                                 , state
                                                 , step
                                                 , stepHyperparameters
-                                                , unsafeState
                                                 )
 import           System.Random                  ( Random )
 import           Test.Hspec                     ( Spec
@@ -135,7 +133,7 @@ spec =
         describe "clamp" $ do
           it "should return probabilities bounded by threshold"
             $ property
-            $ \ps' g' ->
+            $ \s ->
                 let
                   -- Arbitrary upper bound can fail
                   -- because of floating point precision errors.
@@ -143,16 +141,14 @@ spec =
                   -- We can't use `0.1` for `lb`
                   -- because of floating point precision errors.
                   lb = (1 - 0.9)
-                  s  = unsafeState' (fmap fromArbC ps', createWith' g')
                   (ps1, _) =
                     fromState' $ clamp (fromJust $ clampHyperparameters ub) s
                 in
                   all (betweenInc lb ub) ps1
           it "should return the same result for 1 - t"
             $ property
-            $ \(ArbitraryClosedBounded01Num t) ps' g' ->
+            $ \(ArbitraryClosedBounded01Num t) s ->
                 let
-                  s = unsafeState' (fmap fromArbC ps', createWith' g')
                   (psA, _) =
                     fromState' $ clamp (fromJust $ clampHyperparameters t) s
                   (psB, _) = fromState'
@@ -161,12 +157,10 @@ spec =
                   psA == psB
           it "should not change probabilities if within threshold"
             $ property
-            $ \ps' g' ->
-                let ps0 = fmap fromArbC ps'
+            $ \s ->
+                let (ps0, _) = fromState' s
                     (ps1, _) =
-                      fromState'
-                        $ clamp (fromJust $ clampHyperparameters 1)
-                        $ unsafeState' (ps0, createWith' g')
+                      fromState' $ clamp (fromJust $ clampHyperparameters 1) s
                 in  ps0 == ps1
 
         -- describe "adjust" $ do
@@ -175,15 +169,6 @@ spec =
         --     $ \rate' (a :: Double) b ->
         --         let rate = fromArbC rate'
         --         in  betweenInc (min a b) (max a b) (adjust rate a b)
-
-
-createWith' :: [(Word64, Word64, Word64)] -> SFC.Gen
-createWith' xs =
-  A.run $ SFC.createWith $ A.use $ A.fromList (A.Z A.:. length xs) xs
-
-unsafeState' :: ([Double], SFC.Gen) -> State Double
-unsafeState' (ps, g) =
-  unsafeState $ A.use (A.fromList (A.Z A.:. length ps) ps, g)
 
 fromState' :: State Double -> ([Double], SFC.Gen)
 fromState' = first A.toList . A.run . fromState
