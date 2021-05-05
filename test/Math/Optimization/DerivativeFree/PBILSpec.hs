@@ -16,7 +16,8 @@ import qualified Data.Array.Accelerate.System.Random.SFC
 import           Data.Bifunctor                 ( first )
 import           Data.Maybe                     ( fromJust )
 import           Math.Optimization.DerivativeFree.PBIL
-                                                ( MutateHyperparameters
+                                                ( ClampHyperparameters
+                                                , MutateHyperparameters
                                                 , State
                                                 , StepHyperparameters
                                                 , awhile
@@ -55,8 +56,11 @@ instance (Num a, Ord a, Random a, A.Fractional a, A.Ord a) => Arbitrary (State a
   arbitrary = suchThatMap arbStateTuple (uncurry state)   where
     arbStateTuple = do
       n  <- chooseInt (0, 100)
-      ps <- fmap fromArbC . take n <$> infiniteListOf arbitrary
-      g  <- take n <$> infiniteListOf arbitrary
+      ps <-
+        fmap (\(ArbitraryClosedBounded01Num x) -> x)
+        .   take n
+        <$> infiniteListOf arbitrary
+      g <- take n <$> infiniteListOf arbitrary
       pure (A.fromList (A.Z A.:. n) ps, A.fromList (A.Z A.:. n) g)
 
 instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (StepHyperparameters a) where
@@ -73,14 +77,14 @@ instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (MutateHyperparam
     )
     (uncurry mutateHyperparameters)
 
+instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ClampHyperparameters a) where
+  arbitrary = suchThatMap (choose (0.5000001, 0.9999999)) clampHyperparameters
+
 newtype ArbitraryClosedBounded01Num a = ArbitraryClosedBounded01Num a
   deriving (Eq, Ord, Show)
 
 instance (Num a, Ord a, Random a) => Arbitrary (ArbitraryClosedBounded01Num a) where
   arbitrary = ArbitraryClosedBounded01Num <$> choose (0, 1)
-
-fromArbC :: ArbitraryClosedBounded01Num a -> a
-fromArbC (ArbitraryClosedBounded01Num x) = x
 
 spec :: Spec
 spec =
@@ -145,23 +149,9 @@ spec =
                     fromState' $ clamp (fromJust $ clampHyperparameters ub) s
                 in
                   all (betweenInc lb ub) ps1
-          it "should return the same result for 1 - t"
-            $ property
-            $ \(ArbitraryClosedBounded01Num t) s ->
-                let
-                  (psA, _) =
-                    fromState' $ clamp (fromJust $ clampHyperparameters t) s
-                  (psB, _) = fromState'
-                    $ clamp (fromJust $ clampHyperparameters $ 1 - t) s
-                in
-                  psA == psB
-          it "should not change probabilities if within threshold"
-            $ property
-            $ \s ->
-                let (ps0, _) = fromState' s
-                    (ps1, _) =
-                      fromState' $ clamp (fromJust $ clampHyperparameters 1) s
-                in  ps0 == ps1
+          it "should be idempotent" $ property $ \h (s :: State Double) ->
+            fst (A.run $ fromState $ clamp h s)
+              `shouldBe` fst (A.run $ fromState $ clamp h $ clamp h s)
 
         -- describe "adjust" $ do
         --   it "should return a number bounded by a and b"
