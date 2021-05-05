@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Math.Optimization.DerivativeFree.PBILSpec
   ( spec
@@ -52,30 +53,21 @@ import           Test.QuickCheck                ( Arbitrary(..)
                                                 , suchThatMap
                                                 )
 
-newtype ArbitraryState a = ArbitraryState (State a)
-  deriving (Show)
-
-instance (Num a, Ord a, Random a, A.Fractional a, A.Ord a) => Arbitrary (ArbitraryState a) where
-  arbitrary = ArbitraryState <$> suchThatMap arbStateTuple (uncurry state)   where
+instance (Num a, Ord a, Random a, A.Fractional a, A.Ord a) => Arbitrary (State a) where
+  arbitrary = suchThatMap arbStateTuple (uncurry state)   where
     arbStateTuple = do
       n  <- chooseInt (0, 100)
       ps <- fmap fromArbC . take n <$> infiniteListOf arbitrary
       g  <- take n <$> infiniteListOf arbitrary
       pure (A.fromList (A.Z A.:. n) ps, A.fromList (A.Z A.:. n) g)
 
-newtype ArbitraryStepHyperparameters a = ArbitraryStepHyperparameters (StepHyperparameters a)
-  deriving (Show)
-
-instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ArbitraryStepHyperparameters a) where
-  arbitrary = ArbitraryStepHyperparameters <$> suchThatMap
+instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (StepHyperparameters a) where
+  arbitrary = suchThatMap
     (applyArbitrary2 (\x (ArbitraryClosedBounded01Num y) -> (x, y)))
     (uncurry stepHyperparameters)
 
-newtype ArbitraryMutateHyperparameters a = ArbitraryMutateHyperparameters (MutateHyperparameters a)
-  deriving (Show)
-
-instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ArbitraryMutateHyperparameters a) where
-  arbitrary = ArbitraryMutateHyperparameters <$> suchThatMap
+instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (MutateHyperparameters a) where
+  arbitrary = suchThatMap
     (applyArbitrary2
       (\(ArbitraryClosedBounded01Num x) (ArbitraryClosedBounded01Num y) ->
         (x, y)
@@ -121,7 +113,7 @@ spec =
             -- such that 1 step
             -- improves objective value.
             $ property
-            $ \(ArbitraryStepHyperparameters h) -> do
+            $ \h -> do
                 let
                   f       = sphere'
                   oneStep = do
@@ -136,8 +128,7 @@ spec =
         describe "mutate" $ do
           it "should not change length of probabilities"
             $ property
-            $ \(ArbitraryMutateHyperparameters h) (ArbitraryState (s :: State
-                  Double)) ->
+            $ \h (s :: State Double) ->
                 let length' = length . A.toList . fst . A.run . fromState
                 in  length' s `shouldBe` length' (mutate h s)
 
@@ -177,6 +168,7 @@ spec =
                         $ clamp (fromJust $ clampHyperparameters 1)
                         $ unsafeState' (ps0, createWith' g')
                 in  ps0 == ps1
+
         -- describe "adjust" $ do
         --   it "should return a number bounded by a and b"
         --     $ property
