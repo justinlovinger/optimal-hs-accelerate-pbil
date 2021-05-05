@@ -16,13 +16,13 @@ import           Math.Optimization.DerivativeFree.PBIL
                                                 , State
                                                 , StepHyperparameters
                                                 , awhile
-                                                , converged
-                                                , defaultConvergedHyperparameters
+                                                , defaultIsConvergedHyperparameters
                                                 , defaultMutateHyperparameters
                                                 , defaultStepHyperparameters
                                                 , finalize
                                                 , fromState
                                                 , initialState
+                                                , isConverged
                                                 , mutate
                                                 , mutateHyperparameters
                                                 , state
@@ -80,7 +80,9 @@ spec =
               optimize = do
                 s0 <- initialState sphereN
                 let vn = head . A.toList . A.run $ f $ finalize $ awhile
-                      (A.map A.not . converged defaultConvergedHyperparameters)
+                      ( A.map A.not
+                      . isConverged defaultIsConvergedHyperparameters
+                      )
                       ( mutate (defaultMutateHyperparameters sphereN)
                       . step defaultStepHyperparameters f
                       )

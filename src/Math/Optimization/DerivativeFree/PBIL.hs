@@ -16,10 +16,10 @@ module Math.Optimization.DerivativeFree.PBIL
   , defaultMutateHyperparameters
   , mutateHyperparameters
   , mutate
-  , ConvergedHyperparameters
-  , defaultConvergedHyperparameters
-  , convergedHyperparameters
-  , converged
+  , IsConvergedHyperparameters
+  , defaultIsConvergedHyperparameters
+  , isConvergedHyperparameters
+  , isConverged
   , finalize
   ) where
 
@@ -247,31 +247,32 @@ adjust
   -> a
 adjust (ClosedBounded01Num rate) a b = a + rate * (b - a)
 
-newtype ConvergedHyperparameters a = ConvergedHyperparameters (Exp a)
+newtype IsConvergedHyperparameters a = IsConvergedHyperparameters (Exp a)
   deriving (Show)
 
--- | Return default 'ConvergedHyperparameters'.
-defaultConvergedHyperparameters
-  :: (Fractional a, Ord a, Elt a) => ConvergedHyperparameters a
-defaultConvergedHyperparameters = ConvergedHyperparameters $ A.constant 0.75
+-- | Return default 'IsConvergedHyperparameters'.
+defaultIsConvergedHyperparameters
+  :: (Fractional a, Ord a, Elt a) => IsConvergedHyperparameters a
+defaultIsConvergedHyperparameters =
+  IsConvergedHyperparameters $ A.constant 0.75
 
--- | Return 'ConvergedHyperparameters' if valid.
-convergedHyperparameters
+-- | Return 'IsConvergedHyperparameters' if valid.
+isConvergedHyperparameters
   :: (Fractional a, Ord a, A.Elt a)
   => a -- ^ threshold, in range (0.5,1)
-  -> Maybe (ConvergedHyperparameters a)
-convergedHyperparameters t
+  -> Maybe (IsConvergedHyperparameters a)
+isConvergedHyperparameters t
   | t <= 0.5  = Nothing
   | t >= 1.0  = Nothing
-  | otherwise = Just $ ConvergedHyperparameters $ A.constant t
+  | otherwise = Just $ IsConvergedHyperparameters $ A.constant t
 
 -- | Has 'State' converged?
-converged
+isConverged
   :: (A.Fractional a, A.Ord a)
-  => ConvergedHyperparameters a
+  => IsConvergedHyperparameters a
   -> State a
   -> A.Acc (A.Scalar Bool)
-converged (ConvergedHyperparameters ub) (State (T2 ps _)) = A.all
+isConverged (IsConvergedHyperparameters ub) (State (T2 ps _)) = A.all
   (\x -> x A.< lb A.|| x A.> ub)
   ps
   where lb = 1 - ub
