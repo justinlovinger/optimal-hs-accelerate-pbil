@@ -44,7 +44,7 @@ import           Test.Hspec                     ( Spec
                                                 , shouldSatisfy
                                                 )
 import           Test.QuickCheck                ( Arbitrary(..)
-                                                , applyArbitrary2
+                                                , Gen
                                                 , choose
                                                 , chooseInt
                                                 , infiniteListOf
@@ -56,35 +56,26 @@ instance (Num a, Ord a, Random a, A.Fractional a, A.Ord a) => Arbitrary (State a
   arbitrary = suchThatMap arbStateTuple (uncurry state)   where
     arbStateTuple = do
       n  <- chooseInt (0, 100)
-      ps <-
-        fmap (\(ArbitraryClosedBounded01Num x) -> x)
-        .   take n
-        <$> infiniteListOf arbitrary
-      g <- take n <$> infiniteListOf arbitrary
+      ps <- take n <$> infiniteListOf (choose (0, 1))
+      g  <- take n <$> infiniteListOf arbitrary
       pure (A.fromList (A.Z A.:. n) ps, A.fromList (A.Z A.:. n) g)
 
 instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (StepHyperparameters a) where
-  arbitrary = suchThatMap
-    (applyArbitrary2 (\x (ArbitraryClosedBounded01Num y) -> (x, y)))
-    (uncurry stepHyperparameters)
+  arbitrary =
+    suchThatMap (zipGen arbitrary (choose (0, 1))) $ uncurry stepHyperparameters
 
 instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (MutateHyperparameters a) where
-  arbitrary = suchThatMap
-    (applyArbitrary2
-      (\(ArbitraryClosedBounded01Num x) (ArbitraryClosedBounded01Num y) ->
-        (x, y)
-      )
-    )
-    (uncurry mutateHyperparameters)
+  arbitrary = suchThatMap (zipGen (choose (0, 1)) (choose (0, 1)))
+    $ uncurry mutateHyperparameters
+
+zipGen :: Gen a -> Gen b -> Gen (a, b)
+zipGen x y = do
+  a <- x
+  b <- y
+  pure (a, b)
 
 instance (Fractional a, Ord a, Random a, A.Elt a) => Arbitrary (ClampHyperparameters a) where
   arbitrary = suchThatMap (choose (0.5000001, 0.9999999)) clampHyperparameters
-
-newtype ArbitraryClosedBounded01Num a = ArbitraryClosedBounded01Num a
-  deriving (Eq, Ord, Show)
-
-instance (Num a, Ord a, Random a) => Arbitrary (ArbitraryClosedBounded01Num a) where
-  arbitrary = ArbitraryClosedBounded01Num <$> choose (0, 1)
 
 spec :: Spec
 spec =
@@ -150,6 +141,7 @@ spec =
                 in
                   all (betweenInc lb ub) ps1
           it "should be idempotent" $ property $ \h (s :: State Double) ->
+            -- Note: `Gen` from `State` cannot be checked for equality.
             fst (A.run $ fromState $ clamp h s)
               `shouldBe` fst (A.run $ fromState $ clamp h $ clamp h s)
 
