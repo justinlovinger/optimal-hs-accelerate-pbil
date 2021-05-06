@@ -117,13 +117,6 @@ spec =
                 let length' = length . A.toList . fst . A.run . fromState
                 in  length' s `shouldBe` length' (mutate h s)
 
-        -- describe "adjust" $ do
-        --   it "should return a number bounded by a and b"
-        --     $ property
-        --     $ \rate' (a :: Double) b ->
-        --         let rate = fromArbC rate'
-        --         in  betweenInc (min a b) (max a b) (adjust rate a b)
-
 sphere' :: A.Acc (A.Vector Bool) -> A.Acc (A.Scalar Double)
 sphere' = A.map A.negate . sphere . fromBits (-5) 5 . A.reshape
   (A.constant $ A.Z A.:. sphereD A.:. sphereBPD)
