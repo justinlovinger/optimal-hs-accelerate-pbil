@@ -31,20 +31,6 @@ import qualified Data.Array.Accelerate.System.Random.MWC
 import qualified Data.Array.Accelerate.System.Random.SFC
                                                as SFC
 
-type Probability = ClosedBounded01Num
-
-newtype ClosedBounded01Num a = ClosedBounded01Num a
-  deriving (Eq, Ord, Show)
-
-closedBounded01Num :: (Num a, Ord a) => a -> Maybe (ClosedBounded01Num a)
-closedBounded01Num x | x < 0     = Nothing
-                     | x > 1     = Nothing
-                     | otherwise = Just $ ClosedBounded01Num x
-
-aConstantCB01N
-  :: (A.Elt a) => ClosedBounded01Num a -> ClosedBounded01Num (A.Exp a)
-aConstantCB01N (ClosedBounded01Num x) = ClosedBounded01Num $ A.constant x
-
 newtype State a = State (A.Acc (A.Vector a, SFC.Gen))
   deriving (Show)
 
@@ -94,14 +80,14 @@ awhile f g (State x) = State $ A.awhile (f . State) (fromState . g . State) x
 
 data StepHyperparameters a = StepHyperparameters
   { sampleSize :: A.Exp Int
-  , adjustRate :: ClosedBounded01Num (A.Exp a)
+  , adjustRate :: A.Exp a
   }
   deriving Show
 
 -- | Return default 'StepHyperparameters'.
 defaultStepHyperparameters
   :: (A.Fractional a, A.Ord a) => StepHyperparameters a
-defaultStepHyperparameters = StepHyperparameters 20 (ClosedBounded01Num 0.1)
+defaultStepHyperparameters = StepHyperparameters 20 0.1
 
 -- | Return 'StepHyperparameters' if valid.
 stepHyperparameters
@@ -113,7 +99,7 @@ stepHyperparameters n r
   | n < 2
   = Nothing
   | otherwise
-  = StepHyperparameters (A.constant n) . aConstantCB01N <$> closedBounded01Num r
+  = StepHyperparameters (A.constant n) . A.constant <$> maybeInClosedRange01 r
 
 -- | Take 1 step towards a 'State' with a higher objective value.
 -- by adjusting probabilities towards the best bits
@@ -171,8 +157,8 @@ fromBool :: (A.Num a) => A.Exp Bool -> A.Exp a
 fromBool x = A.cond x 1 0
 
 data MutateHyperparameters a = MutateHyperparameters
-  { mutationChance     :: Probability (A.Exp a)
-  , mutationAdjustRate :: ClosedBounded01Num (A.Exp a)
+  { mutationChance     :: A.Exp a
+  , mutationAdjustRate :: A.Exp a
   }
   deriving Show
 
@@ -181,9 +167,7 @@ defaultMutateHyperparameters
   :: (A.Fractional a, A.Ord a)
   => Int -- ^ number of bits in each sample
   -> MutateHyperparameters a
-defaultMutateHyperparameters n = MutateHyperparameters
-  (ClosedBounded01Num . f $ n)
-  (ClosedBounded01Num 0.05)
+defaultMutateHyperparameters n = MutateHyperparameters (f n) 0.05
  where
   f 0 = 1
   f x = 1 / fromIntegral x
@@ -195,9 +179,14 @@ mutateHyperparameters
   -> a -- ^ mutation adjust rate, in range [0,1]
   -> Maybe (MutateHyperparameters a)
 mutateHyperparameters mc mar = do
-  mc'  <- closedBounded01Num mc
-  mar' <- closedBounded01Num mar
-  pure $ MutateHyperparameters (aConstantCB01N mc') (aConstantCB01N mar')
+  mc'  <- maybeInClosedRange01 mc
+  mar' <- maybeInClosedRange01 mar
+  pure $ MutateHyperparameters (A.constant mc') (A.constant mar')
+
+maybeInClosedRange01 :: (Fractional a, Ord a) => a -> Maybe a
+maybeInClosedRange01 x | x < 0     = Nothing
+                       | x > 1     = Nothing
+                       | otherwise = Just x
 
 -- | Randomly adjust probabilities.
 mutate
@@ -205,14 +194,12 @@ mutate
   => MutateHyperparameters a
   -> State a
   -> State a
-mutate (MutateHyperparameters (ClosedBounded01Num mc) mar) (State (A.T2 ps g0))
-  = State $ A.T2
+mutate (MutateHyperparameters mc mar) (State (A.T2 ps g0)) = State $ A.T2
   -- 'adjust' from a probability to a number in range 0 to 1
   -- will always be a valid probability,
   -- because 'adjust' will return a value between that range.
-    (A.zipWith3 (\r1 p r2 -> A.cond (r1 A.<= mc) (adjust mar p r2) p) rs1 ps rs2
-    )
-    g2
+  (A.zipWith3 (\r1 p r2 -> A.cond (r1 A.<= mc) (adjust mar p r2) p) rs1 ps rs2)
+  g2
  where
   (rs1, g1) = SFC.runRandom g0 SFC.randomVector
   (rs2, g2) = SFC.runRandom g1 SFC.randomVector
@@ -221,7 +208,7 @@ mutate (MutateHyperparameters (ClosedBounded01Num mc) mar) (State (A.T2 ps g0))
 -- at given rate.
 adjustArray
   :: (A.Shape sh, A.Num a)
-  => ClosedBounded01Num (A.Exp a) -- ^ adjustment rate
+  => A.Exp a -- ^ adjustment rate, in range [0, 1]
   -> A.Acc (A.Array sh a) -- ^ from
   -> A.Acc (A.Array sh a) -- ^ to
   -> A.Acc (A.Array sh a)
@@ -231,11 +218,11 @@ adjustArray rate = A.zipWith (adjust rate)
 -- at given rate.
 adjust
   :: (Num a)
-  => ClosedBounded01Num a  -- ^ adjustment rate
+  => a  -- ^ adjustment rate, in range [0, 1]
   -> a -- ^ from
   -> a -- ^ to
   -> a
-adjust (ClosedBounded01Num rate) a b = a + rate * (b - a)
+adjust rate a b = a + rate * (b - a)
 
 newtype IsConvergedHyperparameters a = IsConvergedHyperparameters (A.Exp a)
   deriving (Show)
