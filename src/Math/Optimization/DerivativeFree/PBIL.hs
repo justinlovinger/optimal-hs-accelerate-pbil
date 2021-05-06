@@ -23,31 +23,13 @@ module Math.Optimization.DerivativeFree.PBIL
   , finalize
   ) where
 
-import           Data.Array.Accelerate          ( (:.)(..)
-                                                , Acc
-                                                , Array
-                                                , Arrays
-                                                , Elt
-                                                , Exp
-                                                , Scalar
-                                                , Shape
-                                                , pattern T2
-                                                , pattern T3
-                                                , Vector
-                                                , Z(Z)
-                                                )
 import qualified Data.Array.Accelerate         as A
 import qualified Data.Array.Accelerate.Interpreter
                                                as AI
 import qualified Data.Array.Accelerate.System.Random.MWC
                                                as MWC
-import           Data.Array.Accelerate.System.Random.SFC
-                                                ( Gen
-                                                , Uniform
-                                                , createWith
-                                                , randomVector
-                                                , runRandom
-                                                )
+import qualified Data.Array.Accelerate.System.Random.SFC
+                                               as SFC
 
 type Probability = ClosedBounded01Num
 
@@ -59,10 +41,11 @@ closedBounded01Num x | x < 0     = Nothing
                      | x > 1     = Nothing
                      | otherwise = Just $ ClosedBounded01Num x
 
-aConstantCB01N :: (Elt a) => ClosedBounded01Num a -> ClosedBounded01Num (Exp a)
+aConstantCB01N
+  :: (A.Elt a) => ClosedBounded01Num a -> ClosedBounded01Num (A.Exp a)
 aConstantCB01N (ClosedBounded01Num x) = ClosedBounded01Num $ A.constant x
 
-newtype State a = State (Acc (Vector a, Gen))
+newtype State a = State (A.Acc (A.Vector a, SFC.Gen))
   deriving (Show)
 
 -- | Return recommended initial 'State'.
@@ -70,9 +53,9 @@ initialState
   :: Int -- ^ number of bits in each sample
   -> IO (State Double)
 initialState nb = do
-  g <- createWith . A.use <$> MWC.randomArray MWC.uniform sh
-  pure $ State $ T2 (A.fill (A.constant sh) $ A.constant 0.5) g
-  where sh = Z :. nb
+  g <- SFC.createWith . A.use <$> MWC.randomArray MWC.uniform sh
+  pure $ State $ A.T2 (A.fill (A.constant sh) $ A.constant 0.5) g
+  where sh = A.Z A.:. nb
 
 -- | Return 'State' if valid.
 state
@@ -86,18 +69,18 @@ state ps g
   | head $ A.toList $ AI.run $ A.any (\x -> x A.< 0 A.|| x A.> 1) $ A.use ps
   = Nothing
   | otherwise
-  = Just $ State $ T2 (A.use ps) (createWith $ A.use g)
+  = Just $ State $ A.T2 (A.use ps) (SFC.createWith $ A.use g)
 
 -- | Return 'State' without safety checking.
 -- Probabilities must be in range [0,1].
 -- Random generator must have same shape as probabilities.
 unsafeState
-  :: (Elt a)
-  => Acc (Vector a, Gen) -- ^ (probabilities, random state)
+  :: (A.Elt a)
+  => A.Acc (A.Vector a, SFC.Gen) -- ^ (probabilities, random state)
   -> State a
 unsafeState = State
 
-fromState :: (Elt a) => State a -> Acc (Vector a, Gen)
+fromState :: (A.Elt a) => State a -> A.Acc (A.Vector a, SFC.Gen)
 fromState (State s) = s
 
 -- | Run Accelerate `awhile` with 'State'.
@@ -110,8 +93,8 @@ awhile
 awhile f g (State x) = State $ A.awhile (f . State) (fromState . g . State) x
 
 data StepHyperparameters a = StepHyperparameters
-  { sampleSize :: Exp Int
-  , adjustRate :: ClosedBounded01Num (Exp a)
+  { sampleSize :: A.Exp Int
+  , adjustRate :: ClosedBounded01Num (A.Exp a)
   }
   deriving Show
 
@@ -136,20 +119,20 @@ stepHyperparameters n r
 -- by adjusting probabilities towards the best bits
 -- in a set of samples.
 step
-  :: (A.Num a, A.Ord a, Uniform a, A.Ord b)
+  :: (A.Num a, A.Ord a, SFC.Uniform a, A.Ord b)
   => StepHyperparameters a
-  -> (Acc (Vector Bool) -> Acc (Scalar b)) -- ^ objective function, maximize
+  -> (A.Acc (A.Vector Bool) -> A.Acc (A.Scalar b)) -- ^ objective function, maximize
   -> State a
   -> State a
-step (StepHyperparameters n ar) f (State (T2 ps g0)) = State $ T2 ps' g1 where
-  (T3 _ bsStar g1) = aiterate
+step (StepHyperparameters n ar) f (State (A.T2 ps g0)) = State $ A.T2 ps' g1 where
+  (A.T3 _ bsStar g1) = aiterate
     (n - 1)
-    (\(T3 fbs bs g) ->
-      let (T2 bs' g') = sample ps g
-          fbs'        = f bs'
-      in  A.acond (A.the fbs A.< A.the fbs') (T3 fbs' bs' g') (T3 fbs bs g')
+    (\(A.T3 fbs bs g) ->
+      let (A.T2 bs' g') = sample ps g
+          fbs'          = f bs'
+      in  A.acond (A.the fbs A.< A.the fbs') (A.T3 fbs' bs' g') (A.T3 fbs bs g')
     )
-    (let (T2 bs g) = sample ps g0 in T3 (f bs) bs g)
+    (let (A.T2 bs g) = sample ps g0 in A.T3 (f bs) bs g)
   -- 'adjust' from a probability to a bit
   -- will always be a valid probability,
   -- because a bit is 0 or 1
@@ -158,31 +141,38 @@ step (StepHyperparameters n ar) f (State (T2 ps g0)) = State $ T2 ps' g1 where
 
 -- | Repeatedly apply a function a fixed number of times.
 aiterate
-  :: (Arrays a)
-  => Exp Int -- ^ number of times to apply function
-  -> (Acc a -> Acc a) -- ^ function to apply
-  -> Acc a -- ^ initial value
-  -> Acc a
+  :: (A.Arrays a)
+  => A.Exp Int -- ^ number of times to apply function
+  -> (A.Acc a -> A.Acc a) -- ^ function to apply
+  -> A.Acc a -- ^ initial value
+  -> A.Acc a
 aiterate n f xs0 = A.asnd $ A.awhile
   (A.unit . (A.< n) . A.the . A.afst)
   (\(A.T2 i xs) -> A.T2 (i !+ 1) (f xs))
   (A.lift (A.unit $ A.constant (0 :: Int), xs0))
 
 -- | Add scalar to each element of an array.
-(!+) :: (Shape sh, A.Num a) => Acc (Array sh a) -> Exp a -> Acc (Array sh a)
+(!+)
+  :: (A.Shape sh, A.Num a)
+  => A.Acc (A.Array sh a)
+  -> A.Exp a
+  -> A.Acc (A.Array sh a)
 (!+) a x = A.map (+ x) a
 
 sample
-  :: (A.Ord a, Uniform a) => Acc (Vector a) -> Acc Gen -> Acc (Vector Bool, Gen)
+  :: (A.Ord a, SFC.Uniform a)
+  => A.Acc (A.Vector a)
+  -> A.Acc SFC.Gen
+  -> A.Acc (A.Vector Bool, SFC.Gen)
 sample ps g = A.lift (A.zipWith (A.<=) rs ps, g')
-  where (rs, g') = runRandom g randomVector
+  where (rs, g') = SFC.runRandom g SFC.randomVector
 
-fromBool :: (A.Num a) => Exp Bool -> Exp a
+fromBool :: (A.Num a) => A.Exp Bool -> A.Exp a
 fromBool x = A.cond x 1 0
 
 data MutateHyperparameters a = MutateHyperparameters
-  { mutationChance     :: Probability (Exp a)
-  , mutationAdjustRate :: ClosedBounded01Num (Exp a)
+  { mutationChance     :: Probability (A.Exp a)
+  , mutationAdjustRate :: ClosedBounded01Num (A.Exp a)
   }
   deriving Show
 
@@ -200,7 +190,7 @@ defaultMutateHyperparameters n = MutateHyperparameters
 
 -- | Return 'MutateHyperparameters' if valid.
 mutateHyperparameters
-  :: (Fractional a, Ord a, Elt a)
+  :: (Fractional a, Ord a, A.Elt a)
   => a -- ^ mutation chance, in range [0,1]
   -> a -- ^ mutation adjust rate, in range [0,1]
   -> Maybe (MutateHyperparameters a)
@@ -211,12 +201,12 @@ mutateHyperparameters mc mar = do
 
 -- | Randomly adjust probabilities.
 mutate
-  :: (A.Num a, A.Ord a, Uniform a)
+  :: (A.Num a, A.Ord a, SFC.Uniform a)
   => MutateHyperparameters a
   -> State a
   -> State a
-mutate (MutateHyperparameters (ClosedBounded01Num mc) mar) (State (T2 ps g0)) =
-  State $ T2
+mutate (MutateHyperparameters (ClosedBounded01Num mc) mar) (State (A.T2 ps g0))
+  = State $ A.T2
   -- 'adjust' from a probability to a number in range 0 to 1
   -- will always be a valid probability,
   -- because 'adjust' will return a value between that range.
@@ -224,17 +214,17 @@ mutate (MutateHyperparameters (ClosedBounded01Num mc) mar) (State (T2 ps g0)) =
     )
     g2
  where
-  (rs1, g1) = runRandom g0 randomVector
-  (rs2, g2) = runRandom g1 randomVector
+  (rs1, g1) = SFC.runRandom g0 SFC.randomVector
+  (rs2, g2) = SFC.runRandom g1 SFC.randomVector
 
 -- | Adjust each number in `a` to corresponding number in `b`
 -- at given rate.
 adjustArray
-  :: (Shape sh, A.Num a)
-  => ClosedBounded01Num (Exp a) -- ^ adjustment rate
-  -> Acc (Array sh a) -- ^ from
-  -> Acc (Array sh a) -- ^ to
-  -> Acc (Array sh a)
+  :: (A.Shape sh, A.Num a)
+  => ClosedBounded01Num (A.Exp a) -- ^ adjustment rate
+  -> A.Acc (A.Array sh a) -- ^ from
+  -> A.Acc (A.Array sh a) -- ^ to
+  -> A.Acc (A.Array sh a)
 adjustArray rate = A.zipWith (adjust rate)
 
 -- | Adjust a number from `a` to `b`
@@ -247,12 +237,12 @@ adjust
   -> a
 adjust (ClosedBounded01Num rate) a b = a + rate * (b - a)
 
-newtype IsConvergedHyperparameters a = IsConvergedHyperparameters (Exp a)
+newtype IsConvergedHyperparameters a = IsConvergedHyperparameters (A.Exp a)
   deriving (Show)
 
 -- | Return default 'IsConvergedHyperparameters'.
 defaultIsConvergedHyperparameters
-  :: (Fractional a, Ord a, Elt a) => IsConvergedHyperparameters a
+  :: (Fractional a, Ord a, A.Elt a) => IsConvergedHyperparameters a
 defaultIsConvergedHyperparameters =
   IsConvergedHyperparameters $ A.constant 0.75
 
@@ -272,11 +262,11 @@ isConverged
   => IsConvergedHyperparameters a
   -> State a
   -> A.Acc (A.Scalar Bool)
-isConverged (IsConvergedHyperparameters ub) (State (T2 ps _)) = A.all
+isConverged (IsConvergedHyperparameters ub) (State (A.T2 ps _)) = A.all
   (\x -> x A.< lb A.|| x A.> ub)
   ps
   where lb = 1 - ub
 
 -- | Finalize 'State' probabilities into bits.
-finalize :: (A.Fractional a, A.Ord a) => State a -> Acc (Vector Bool)
-finalize (State (T2 ps _)) = A.map (A.>= 0.5) ps
+finalize :: (A.Fractional a, A.Ord a) => State a -> A.Acc (A.Vector Bool)
+finalize (State (A.T2 ps _)) = A.map (A.>= 0.5) ps

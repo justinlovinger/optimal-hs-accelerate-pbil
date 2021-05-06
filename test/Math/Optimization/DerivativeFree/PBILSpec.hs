@@ -10,7 +10,7 @@ module Math.Optimization.DerivativeFree.PBILSpec
 
 import qualified Data.Array.Accelerate         as A
 import qualified Data.Array.Accelerate.Interpreter
-                                               as A
+                                               as AI
 import           Math.Optimization.DerivativeFree.PBIL
                                                 ( MutateHyperparameters
                                                 , State
@@ -79,7 +79,7 @@ spec =
               t        = -0.01
               optimize = do
                 s0 <- initialState sphereN
-                let vn = head . A.toList . A.run $ f $ finalize $ awhile
+                let vn = head . A.toList . AI.run $ f $ finalize $ awhile
                       ( A.map A.not
                       . isConverged defaultIsConvergedHyperparameters
                       )
@@ -103,9 +103,11 @@ spec =
                   f       = sphere'
                   oneStep = do
                     s0 <- initialState sphereN
-                    let v0 = head . A.toList . A.run $ f $ finalize s0
-                        v1 =
-                          head . A.toList . A.run $ f $ finalize $ step h f s0
+                    let v0 = head . A.toList . AI.run $ f $ finalize s0
+                        v1 = head . A.toList . AI.run $ f $ finalize $ step
+                          h
+                          f
+                          s0
                     if v1 > v0 then pure True else oneStep
                 done <- oneStep
                 done `shouldBe` True
@@ -114,7 +116,7 @@ spec =
           it "should not change length of probabilities"
             $ property
             $ \h (s :: State Double) ->
-                let length' = length . A.toList . fst . A.run . fromState
+                let length' = length . A.toList . fst . AI.run . fromState
                 in  length' s `shouldBe` length' (mutate h s)
 
 sphere' :: A.Acc (A.Vector Bool) -> A.Acc (A.Scalar Double)
