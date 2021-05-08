@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternSynonyms #-}
 
-module Math.Optimization.DerivativeFree.PBIL
+module Math.Optimization.DerivativeFree.PBIL.Accelerate
   ( State
   , initialState
   , state

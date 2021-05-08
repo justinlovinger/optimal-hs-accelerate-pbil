@@ -1,6 +1,6 @@
-name:                optimal-pbil
+name:                optimal-pbil-accelerate
 version:             0.1.0.0
-github:              "JustinLovinger/optimal-pbil"
+github:              "JustinLovinger/optimal-pbil-accelerate"
 license:             MIT
 author:              "Justin Lovinger"
 maintainer:          "git@justinlovinger.com"
@@ -16,7 +16,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/JustinLovinger/optimal-pbil#readme>
+description:         Please see the README on GitHub at <https://github.com/JustinLovinger/optimal-pbil-accelerate#readme>
 
 ghc-options:
   -Wall
@@ -31,7 +31,7 @@ library:
   source-dirs: src
 
 tests:
-  optimal-pbil-test:
+  optimal-pbil-accelerate-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -41,5 +41,5 @@ tests:
     dependencies:
       - QuickCheck
       - hspec
-      - optimal-pbil
+      - optimal-pbil-accelerate
       - random >= 1.1

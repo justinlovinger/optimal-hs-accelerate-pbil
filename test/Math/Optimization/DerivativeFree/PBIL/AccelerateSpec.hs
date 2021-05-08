@@ -4,14 +4,14 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Math.Optimization.DerivativeFree.PBILSpec
+module Math.Optimization.DerivativeFree.PBIL.AccelerateSpec
   ( spec
   ) where
 
 import qualified Data.Array.Accelerate         as A
 import qualified Data.Array.Accelerate.Interpreter
                                                as AI
-import           Math.Optimization.DerivativeFree.PBIL
+import           Math.Optimization.DerivativeFree.PBIL.Accelerate
                                                 ( MutateHyperparameters
                                                 , State
                                                 , StepHyperparameters
