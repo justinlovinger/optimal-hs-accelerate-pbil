@@ -10,8 +10,8 @@ extra-source-files:
 - README.md
 
 # Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            optimization
+synopsis:            Run PBIL derivative-free (metaheuristic) optimization backed by Accelerate.
+category:            optimization
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
