@@ -1,6 +1,6 @@
 cradle:
   cabal:
     - path: "./src"
-      component: "lib:optimal-pbil-accelerate"
+      component: "lib:optimal-hs-accelerate-pbil"
     - path: "./test"
-      component: "test:optimal-pbil-accelerate-test"
+      component: "test:optimal-hs-accelerate-pbil-test"

@@ -1,4 +1,4 @@
-# optimal-pbil-accelerate
+# optimal-hs-accelerate-pbil
 
 Run PBIL derivative-free (metaheuristic) optimization
 backed by [Accelerate](https://github.com/AccelerateHS/accelerate).
@@ -13,7 +13,7 @@ and `f` is an objective function.
 Optimize until convergence like:
 ```haskell
 import qualified Data.Array.Accelerate         as A
-import qualified Math.Optimization.DerivativeFree.PBIL.Accelerate
+import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL
                                                as PBIL
 
 optimize = do

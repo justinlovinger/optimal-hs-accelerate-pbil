@@ -10,4 +10,4 @@
         fetchSubmodules = true;
       }) { };
   };
-}).callCabal2nix "optimal-pbil-accelerate" ./. { }
+}).callCabal2nix "optimal-hs-accelerate-pbil" ./. { }
