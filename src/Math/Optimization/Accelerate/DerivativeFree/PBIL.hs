@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE PatternSynonyms #-}
 
 module Math.Optimization.Accelerate.DerivativeFree.PBIL
   ( State

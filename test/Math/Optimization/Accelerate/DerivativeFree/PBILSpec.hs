@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -11,6 +10,8 @@ module Math.Optimization.Accelerate.DerivativeFree.PBILSpec
 import qualified Data.Array.Accelerate         as A
 import qualified Data.Array.Accelerate.Interpreter
                                                as AI
+import           Math.Optimization.Accelerate.Binary
+                                                ( reversedBitsToFrac )
 import           Math.Optimization.Accelerate.DerivativeFree.PBIL
                                                 ( MutateHyperparameters
                                                 , State
@@ -120,7 +121,7 @@ spec =
                 in  length' s `shouldBe` length' (mutate h s)
 
 sphere' :: A.Acc (A.Vector Bool) -> A.Acc (A.Scalar Double)
-sphere' = A.map A.negate . sphere . fromBits (-5) 5 . A.reshape
+sphere' = A.map A.negate . sphere . reversedBitsToFrac (-5) 5 . A.reshape
   (A.constant $ A.Z A.:. sphereD A.:. sphereBPD)
 
 sphereN :: Int
@@ -134,50 +135,3 @@ sphereBPD = 8
 
 sphere :: (A.Num a) => A.Acc (A.Vector a) -> A.Acc (A.Scalar a)
 sphere = A.sum . A.map (^ (2 :: Int))
-
--- | Reduce innermost dimension
--- to numbers within lower and upper bound
--- from bits.
-fromBits
-  :: (A.Shape sh, A.Fractional a)
-  => A.Exp a -- ^ Lower bound
-  -> A.Exp a -- ^ Upper bound
-  -> A.Acc (A.Array (sh A.:. Int) Bool)
-  -> A.Acc (A.Array sh a)
--- Guard on 0 bits
--- to avoid division by 0.
-fromBits lb ub bs = A.acond (nb A.== 0)
-                            (A.fill (A.indexTail sh) lb)
-                            ((a *! fromBits' bs) !+ lb)
- where
-  a  = (ub - lb) / (2 A.^ nb - 1) -- range / max int
-  nb = A.indexHead sh
-  sh = A.shape bs
-
--- | Reduce innermost dimension
--- to base 10 integer representations of bits.
--- Leftmost bit is least significant.
-fromBits'
-  :: (A.Shape sh, A.Num a)
-  => A.Acc (A.Array (sh A.:. Int) Bool)
-  -> A.Acc (A.Array sh a)
-fromBits' = A.sum . A.imap (\i x -> fromBool x * 2 A.^ A.indexHead i)
-
-fromBool :: (A.Num a) => A.Exp Bool -> A.Exp a
-fromBool x = A.cond x 1 0
-
--- | Add scalar to each element of an array.
-(!+)
-  :: (A.Shape sh, A.Num a)
-  => A.Acc (A.Array sh a)
-  -> A.Exp a
-  -> A.Acc (A.Array sh a)
-(!+) a x = A.map (+ x) a
-
--- | Multiply scalar by each element of an array.
-(*!)
-  :: (A.Shape sh, A.Num a)
-  => A.Exp a
-  -> A.Acc (A.Array sh a)
-  -> A.Acc (A.Array sh a)
-(*!) x = A.map (x *)

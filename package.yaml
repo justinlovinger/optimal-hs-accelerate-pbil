@@ -41,5 +41,6 @@ tests:
     dependencies:
       - QuickCheck
       - hspec
+      - optimal-hs-accelerate-binary >= 1.0 && < 1.1
       - optimal-hs-accelerate-pbil
       - random >= 1.1
