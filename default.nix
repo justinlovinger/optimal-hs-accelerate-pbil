@@ -7,7 +7,7 @@
       rev = "v1.0.0.0";
       sha256 = "0nw7rwfm98a1vpd9w7i5ggyb37wcxrlad381551diyfr1ix1jdwn";
       fetchSubmodules = true;
-    }) { };
+    }) { inherit pkgs compiler; };
 
     sfc-random-accelerate = self.callCabal2nix "sfc-random-accelerate"
       (pkgs.fetchFromGitHub {
