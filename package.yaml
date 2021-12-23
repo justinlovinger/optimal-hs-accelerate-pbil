@@ -24,7 +24,11 @@ ghc-options:
 dependencies:
   - accelerate >= 1.3 && < 2
   - base >= 4.7 && < 5
+  - ghc-prim >= 0.6 && < 1
+  - lens
+  - lens-accelerate
   - mwc-random-accelerate >= 0.2 && < 0.3
+  - optimal-hs-accelerate-binary >= 1.1 && < 2
   - sfc-random-accelerate >= 0.1 && < 0.2
 
 library:
@@ -41,6 +45,5 @@ tests:
     dependencies:
       - QuickCheck
       - hspec
-      - optimal-hs-accelerate-binary >= 1.0 && < 1.1
       - optimal-hs-accelerate-pbil
       - random >= 1.1

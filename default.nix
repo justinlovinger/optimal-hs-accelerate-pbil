@@ -4,9 +4,8 @@
     optimal-hs-accelerate-binary = import (pkgs.fetchFromGitHub {
       owner = "JustinLovinger";
       repo = "optimal-hs-accelerate-binary";
-      rev = "v1.0.0.0";
-      sha256 = "0nw7rwfm98a1vpd9w7i5ggyb37wcxrlad381551diyfr1ix1jdwn";
-      fetchSubmodules = true;
+      rev = "v1.1.0.0";
+      sha256 = "1q82jghbjcfk6yxm6nmzkr8cp6blzq1jr80m1f4ysva3w264fiy0";
     }) { inherit pkgs compiler; };
 
     sfc-random-accelerate = self.callCabal2nix "sfc-random-accelerate"
