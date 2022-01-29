@@ -6,16 +6,14 @@ backed by [Accelerate](https://github.com/AccelerateHS/accelerate).
 Optimize until convergence like:
 ```haskell
 import qualified Data.Array.Accelerate         as A
-import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL
-                                               as PBIL
+import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL.Default
+                                               as PBILD
 
 optimize = do
-  s0 <- PBIL.initialState PBIL.defaultNumSamples n
-  pure $ PBIL.finalize $ A.awhile
-    ( A.map A.not
-    . PBIL.isConverged PBIL.defaultIsConvergedHyperparameters
-    )
-    (PBIL.step (PBIL.defaultStepHyperparameters n) f)
+  s0 <- PBILD.initialState n
+  pure $ PBILD.finalize $ A.awhile
+    (A.map A.not . PBILD.isConverged)
+    (PBILD.step n f)
     s0
 ```
 where `n` is the number of bits in a binary problem vector
