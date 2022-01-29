@@ -8,9 +8,12 @@ module Math.Optimization.Accelerate.DerivativeFree.PBILSpec
 import qualified Data.Array.Accelerate         as A
 import qualified Data.Array.Accelerate.Interpreter
                                                as AI
+import           Data.Maybe                     ( fromJust )
 import           Math.Optimization.Accelerate.Binary
                                                 ( reversedBitsToFrac )
-import           Math.Optimization.Accelerate.DerivativeFree.PBIL.Default
+import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL
+                                               as PBIL
+import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL.Default
                                                as PBILD
 import           Test.Hspec                     ( Spec
                                                 , describe
@@ -25,22 +28,29 @@ spec =
     $ describe "DerivativeFree"
     $ describe "PBIL"
     $ do
-        it "should be able to solve sphere problem" $ do
-          let t        = -0.01
-              optimize = do
-                s0 <- PBILD.initialState sphereN
-                let vn =
-                      head
-                        $ A.toList
-                        $ AI.run
-                        $ sphere'
-                        $ PBILD.finalize
-                        $ A.awhile (A.map A.not . PBILD.isConverged)
-                                   (PBILD.step sphereN sphere')
-                                   s0
-                if vn > t then pure vn else optimize
-          vn <- optimize
-          vn `shouldSatisfy` (> t)
+        it "should be able to solve sphere problem" $ fromJust $ do
+          s  <- PBIL.step 0.1 0.1 0.05 sphere'
+          ic <- PBIL.isConverged 0.9
+          pure $ sphereSpec (PBIL.initialState 10) s ic PBIL.finalize
+
+        it "should be able to solve sphere problem with default hyperparameters"
+          $ sphereSpec PBILD.initialState
+                       (PBILD.step sphereN sphere')
+                       PBILD.isConverged
+                       PBILD.finalize
+
+ where
+  sphereSpec initialState step isConverged finalize = do
+    let t        = -0.01
+        optimize = do
+          s0 <- initialState sphereN
+          let vn = head $ A.toList $ AI.run $ sphere' $ finalize $ A.awhile
+                (A.map A.not . isConverged)
+                step
+                s0
+          if vn > t then pure vn else optimize
+    vn <- optimize
+    vn `shouldSatisfy` (> t)
 
 sphere'
   :: (A.Shape sh)
