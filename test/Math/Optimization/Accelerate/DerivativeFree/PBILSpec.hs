@@ -10,8 +10,8 @@ import qualified Data.Array.Accelerate.Interpreter
                                                as AI
 import           Math.Optimization.Accelerate.Binary
                                                 ( reversedBitsToFrac )
-import           Math.Optimization.Accelerate.DerivativeFree.PBIL
-                                               as PBIL
+import           Math.Optimization.Accelerate.DerivativeFree.PBIL.Default
+                                               as PBILD
 import           Test.Hspec                     ( Spec
                                                 , describe
                                                 , it
@@ -26,20 +26,19 @@ spec =
     $ describe "PBIL"
     $ do
         it "should be able to solve sphere problem" $ do
-          let
-            t        = -0.01
-            optimize = do
-              s0 <- PBIL.initialState PBIL.defaultNumSamples sphereN
-              let
-                vn =
-                  head $ A.toList $ AI.run $ sphere' $ PBIL.finalize $ A.awhile
-                    ( A.map A.not
-                    . PBIL.isConverged PBIL.defaultIsConvergedHyperparameters
-                    )
-                    (PBIL.step (PBIL.defaultStepHyperparameters sphereN) sphere'
-                    )
-                    s0
-              if vn > t then pure vn else optimize
+          let t        = -0.01
+              optimize = do
+                s0 <- PBILD.initialState sphereN
+                let vn =
+                      head
+                        $ A.toList
+                        $ AI.run
+                        $ sphere'
+                        $ PBILD.finalize
+                        $ A.awhile (A.map A.not . PBILD.isConverged)
+                                   (PBILD.step sphereN sphere')
+                                   s0
+                if vn > t then pure vn else optimize
           vn <- optimize
           vn `shouldSatisfy` (> t)
 
