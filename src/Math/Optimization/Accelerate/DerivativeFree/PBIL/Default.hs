@@ -25,7 +25,7 @@ import qualified Data.Array.Accelerate.System.Random.SFC
                                                as SFC
 import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL
                                                as PBIL
-import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL.Internal
+import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL.Internal.Default
                                                as PBILI
 import           Math.Optimization.Accelerate.DerivativeFree.PBIL.Probability.Internal
                                                 ( Probability
@@ -36,8 +36,14 @@ import           Math.Optimization.Accelerate.DerivativeFree.PBIL.Probability.In
 initialState
   :: Int -- ^ number of bits in each sample
   -> IO
-       (A.Acc (PBIL.State (A.Vector (Probability Double), SFC.Gen, SFC.Gen)))
-initialState = PBIL.initialState PBILI.defaultNumSamples
+       ( A.Acc
+           (PBILI.State (A.Vector (Probability Double), SFC.Gen, SFC.Gen))
+       )
+initialState nb = do
+  let ps0 = PBILI.initialProbabilities nb
+  gs0 <- PBILI.initialStepGen nb
+  gm0 <- PBILI.initialMutateGen nb
+  pure $ A.lift $ PBILI.State $ A.T3 ps0 gs0 gm0
 
 -- | Take 1 PBIL step towards a higher objective value.
 step
@@ -47,29 +53,29 @@ step
      , A.Ord a
      , SFC.Uniform a
      , Fractional a
+     , Ord a
      , A.Ord b
      )
   => Int -- ^ number of bits in each sample
   -> (A.Acc (A.Matrix Bool) -> A.Acc (A.Vector b)) -- ^ objective function, maximize
-  -> A.Acc (PBIL.State (A.Vector (Probability a), SFC.Gen, SFC.Gen))
-  -> A.Acc (PBIL.State (A.Vector (Probability a), SFC.Gen, SFC.Gen))
+  -> A.Acc (PBILI.State (A.Vector (Probability a), SFC.Gen, SFC.Gen))
+  -> A.Acc
+       (PBILI.State (A.Vector (Probability a), SFC.Gen, SFC.Gen))
 step n f =
   A.lift
     . PBILI.State
-    . ( over (lensProduct _1 _3) (uncurry $ PBILI.mutate mh)
+    . ( over (lensProduct _1 _3) (uncurry $ PBILI.mutate n)
       . over (lensProduct _1 _2) (uncurry step')
       )
     . PBILI.fromAccState
  where
-  step' ps g0 = (PBILI.adjustProbabilities ah ps bss (f bss), g1)
+  step' ps g0 = (PBILI.adjustProbabilities ps bss (f bss), g1)
     where (A.T2 bss g1) = samples ps g0
-  ah = PBILI.defaultAdjustHyperparameters
-  mh = PBILI.defaultMutateHyperparameters n
 
 -- | Has 'State' converged?
 isConverged
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
-     , A.Fractional a
+     , A.Num a
      , A.Ord a
      , Fractional a
      , Ord a
@@ -78,7 +84,4 @@ isConverged
      )
   => A.Acc (PBILI.State (A.Vector (Probability a), b, c))
   -> A.Acc (A.Scalar Bool)
-isConverged =
-  PBILI.isConverged PBILI.defaultIsConvergedHyperparameters
-    . view _1
-    . PBILI.fromAccState
+isConverged = PBILI.isConverged . view _1 . PBILI.fromAccState

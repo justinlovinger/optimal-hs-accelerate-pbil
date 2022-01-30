@@ -93,22 +93,22 @@ step
             )
        )
 step ar mc mar f = do
-  ah <- PBILI.adjustHyperparameters ar
-  mh <- PBILI.mutateHyperparameters mc mar
-  let step' ps g0 = (PBILI.adjustProbabilities ah ps bss (f bss), g1)
+  adjust <- PBILI.adjustProbabilities ar
+  mutate <- PBILI.mutate mc mar
+  let adjust' ps g0 = (adjust ps bss (f bss), g1)
         where (A.T2 bss g1) = samples ps g0
   pure
     $ A.lift
     . PBILI.State
-    . ( over (lensProduct _1 _3) (uncurry $ PBILI.mutate mh)
-      . over (lensProduct _1 _2) (uncurry step')
+    . ( over (lensProduct _1 _3) (uncurry mutate)
+      . over (lensProduct _1 _2) (uncurry adjust')
       )
     . PBILI.fromAccState
 
 -- | Has 'State' converged?
 isConverged
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
-     , A.Fractional a
+     , A.Num a
      , A.Ord a
      , Fractional a
      , Ord a
@@ -121,8 +121,8 @@ isConverged
        -> A.Acc (A.Scalar Bool)
        )
 isConverged t = do
-  ub <- PBILI.isConvergedHyperparameters t
-  pure $ PBILI.isConverged ub . view _1 . PBILI.fromAccState
+  isConverged' <- PBILI.isConverged t
+  pure $ isConverged' . view _1 . PBILI.fromAccState
 
 -- | Finalize 'State' probabilities into bits.
 finalize

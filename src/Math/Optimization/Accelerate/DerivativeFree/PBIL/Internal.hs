@@ -11,20 +11,10 @@ module Math.Optimization.Accelerate.DerivativeFree.PBIL.Internal
   ( State(..)
   , fromAccState
   , initialProbabilities
-  , defaultNumSamples
   , initialStepGen
   , initialMutateGen
-  , AdjustHyperparameters(..)
-  , defaultAdjustHyperparameters
-  , adjustHyperparameters
   , adjustProbabilities
-  , MutateHyperparameters(..)
-  , defaultMutateHyperparameters
-  , mutateHyperparameters
   , mutate
-  , IsConvergedHyperparameters(..)
-  , defaultIsConvergedHyperparameters
-  , isConvergedHyperparameters
   , isConverged
   , finalize
   ) where
@@ -69,9 +59,6 @@ initialProbabilities
 initialProbabilities n =
   A.fill (A.constant $ A.Z A.:. n) $ A.constant (Probability 0.5)
 
-defaultNumSamples :: Int
-defaultNumSamples = 20
-
 initialStepGen
   :: Int -- ^ number of samples in each step
   -> Int -- ^ number of bits in each sample
@@ -87,46 +74,32 @@ initialGen :: Int -> IO (A.Acc SFC.Gen)
 initialGen n =
   SFC.createWith . A.use <$> MWC.randomArray MWC.uniform (A.Z A.:. n)
 
-newtype AdjustHyperparameters a = AdjustHyperparameters
-  { adjustRate :: A.Exp (Probability a)
-  }
-  deriving Show
-
--- | Return default 'AdjustHyperparameters'.
-defaultAdjustHyperparameters
-  :: (A.Elt a, Fractional a) => AdjustHyperparameters a
-defaultAdjustHyperparameters =
-  AdjustHyperparameters $ A.constant $ Probability 0.1
-
--- | Return 'AdjustHyperparameters' if valid.
-adjustHyperparameters
-  :: (A.Elt a, Num a, Ord a)
-  => a -- ^ adjust rate, in range (0,1]
-  -> Maybe (AdjustHyperparameters a)
-adjustHyperparameters r
-  | r <= 0    = Nothing
-  | otherwise = AdjustHyperparameters . A.constant <$> probability r
-
 -- | Adjust probabilities towards the best bits
 -- in a set of samples.
 adjustProbabilities
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
      , A.Num a
-     , A.Ord a
      , SFC.Uniform a
+     , Num a
+     , Ord a
      , A.Ord b
      )
-  => AdjustHyperparameters a
-  -> A.Acc (A.Vector (Probability a))
-  -> A.Acc (A.Matrix Bool) -- ^ Rows of samples
-  -> A.Acc (A.Vector b) -- ^ Objective values corresponding to samples
-  -> A.Acc (A.Vector (Probability a))
-adjustProbabilities (AdjustHyperparameters ar) ps bss fs = adjustArray
-  ar
-  ps
-  (A.map fromBool $ maximumSliceBy fs bss)
+  => a -- ^ adjust rate, in range (0,1]
+  -> Maybe
+       (  A.Acc (A.Vector (Probability a))
+       -> A.Acc (A.Matrix Bool) -- ^ Rows of samples
+       -> A.Acc (A.Vector b) -- ^ Objective values corresponding to samples
+       -> A.Acc (A.Vector (Probability a))
+       )
+adjustProbabilities ar' = fmap adjustProbabilities' mar
  where
+  mar | ar' <= 0  = Nothing
+      | otherwise = A.constant <$> probability ar'
+
+  adjustProbabilities' ar ps bss fs =
+    adjustArray ar ps (A.map fromBool $ maximumSliceBy fs bss)
+
   maximumSliceBy
     :: (A.Shape sh, A.Slice sh, A.Elt a, A.Ord b)
     => A.Acc (A.Array sh b)
@@ -139,102 +112,70 @@ adjustProbabilities (AdjustHyperparameters ar) ps bss fs = adjustArray
     (\ix ix' -> A.cond (A.snd ix A.> A.snd ix') ix ix')
     (A.indexed xs)
 
-data MutateHyperparameters a = MutateHyperparameters
-  { mutationChance     :: A.Exp (Probability a)
-  , mutationAdjustRate :: A.Exp (Probability a)
-  }
-  deriving Show
-
--- | Return default 'MutateHyperparameters'.
-defaultMutateHyperparameters
-  :: (A.Elt a, Fractional a)
-  => Int -- ^ number of bits in each sample
-  -> MutateHyperparameters a
-defaultMutateHyperparameters n = MutateHyperparameters
-  (A.constant $ f n)
-  (A.constant $ Probability 0.05)
- where
-  f x | x < 1     = Probability 1
-      | otherwise = Probability $ 1 / fromIntegral x
-
--- | Return 'MutateHyperparameters' if valid.
-mutateHyperparameters
-  :: (A.Elt a, Num a, Ord a)
-  => a -- ^ mutation chance, in range (0,1]
-  -> a -- ^ mutation adjust rate, in range (0,1]
-  -> Maybe (MutateHyperparameters a)
-mutateHyperparameters mc mar
-  | mc <= 0 = Nothing
-  | mar <= 0 = Nothing
-  | otherwise = do
-    mc'  <- probability mc
-    mar' <- probability mar
-    pure $ MutateHyperparameters (A.constant mc') (A.constant mar')
-
 -- | Randomly adjust probabilities.
 mutate
-  :: (A.Num a, A.Ord a, SFC.Uniform a)
-  => MutateHyperparameters a
-  -> A.Acc (A.Vector (Probability a))
-  -> A.Acc SFC.Gen -- ^ same length as probabilities
-  -> (A.Acc (A.Vector (Probability a)), A.Acc SFC.Gen)
-mutate (MutateHyperparameters mc mar) ps g0 =
-  ( A.zipWith3
-    (\r1 p r2 -> A.cond
-      (r1 A.<= mc)
-      (A.lift3
-        (adjust :: (A.Num a)
-          => Probability (A.Exp a)
-          -> Probability (A.Exp a)
-          -> Probability (A.Exp a)
-          -> Probability (A.Exp a)
-        )
-        mar
-        p
-        r2
-      )
-      p
-    )
-    rs1
-    ps
-    rs2
-  , g2
-  )
+  :: (A.Num a, A.Ord a, Num a, Ord a, SFC.Uniform a)
+  => a -- ^ mutation chance, in range (0,1]
+  -> a -- ^ mutation adjust rate, in range (0,1]
+  -> Maybe
+       (  A.Acc (A.Vector (Probability a))
+       -> A.Acc SFC.Gen -- ^ same length as probabilities
+       -> (A.Acc (A.Vector (Probability a)), A.Acc SFC.Gen)
+       )
+mutate mc' mar' = fmap (uncurry mutate') mmh
  where
-  (rs2, g2) = SFC.runRandom g1 SFC.randomVector
-  (rs1, g1) = SFC.runRandom g0 SFC.randomVector
+  mmh
+    | mc' <= 0 = Nothing
+    | mar' <= 0 = Nothing
+    | otherwise = do
+      mmc  <- probability mc'
+      mmar <- probability mar'
+      pure (A.constant mmc, A.constant mmar)
 
-newtype IsConvergedHyperparameters a = IsConvergedHyperparameters (A.Exp (Probability a))
-  deriving (Show)
-
--- | Return default 'IsConvergedHyperparameters'.
-defaultIsConvergedHyperparameters
-  :: (Fractional a, Ord a, A.Elt a) => IsConvergedHyperparameters a
-defaultIsConvergedHyperparameters =
-  IsConvergedHyperparameters $ A.constant $ Probability 0.75
-
--- | Return 'IsConvergedHyperparameters' if valid.
-isConvergedHyperparameters
-  :: (A.Elt a, Fractional a, Ord a)
-  => a -- ^ threshold, in range (0.5,1)
-  -> Maybe (IsConvergedHyperparameters a)
-isConvergedHyperparameters t
-  | t <= 0.5  = Nothing
-  | t >= 1.0  = Nothing
-  | otherwise = Just $ IsConvergedHyperparameters $ A.constant $ Probability t
+  mutate' mc mar ps g0 =
+    ( A.zipWith3
+      (\r1 p r2 -> A.cond
+        (r1 A.<= mc)
+        (A.lift3
+          (adjust :: (A.Num a)
+            => Probability (A.Exp a)
+            -> Probability (A.Exp a)
+            -> Probability (A.Exp a)
+            -> Probability (A.Exp a)
+          )
+          mar
+          p
+          r2
+        )
+        p
+      )
+      rs1
+      ps
+      rs2
+    , g2
+    )
+   where
+    (rs2, g2) = SFC.runRandom g1 SFC.randomVector
+    (rs1, g1) = SFC.runRandom g0 SFC.randomVector
 
 -- | Have probabilities converged?
 isConverged
-  :: (A.Unlift A.Exp (Probability (A.Exp a)), A.Fractional a, A.Ord a)
-  => IsConvergedHyperparameters a
-  -> A.Acc (A.Vector (Probability a))
-  -> A.Acc (A.Scalar Bool)
-isConverged (IsConvergedHyperparameters ub) = A.all
-  (\x -> x A.< lb A.|| x A.> ub)
+  :: ( A.Unlift A.Exp (Probability (A.Exp a))
+     , A.Num a
+     , A.Ord a
+     , Fractional a
+     , Ord a
+     )
+  => a -- ^ threshold, in range (0.5,1)
+  -> Maybe (A.Acc (A.Vector (Probability a)) -> A.Acc (A.Scalar Bool))
+isConverged t | t <= 0.5  = Nothing
+              | t >= 1.0  = Nothing
+              | otherwise = Just $ A.all (\x -> x A.< lb A.|| x A.> ub)
  where
   lb = A.lift1
     (invert :: (A.Num a) => Probability (A.Exp a) -> Probability (A.Exp a))
     ub
+  ub = A.constant $ Probability t
 
 -- | Finalize probabilities to bits.
 finalize
