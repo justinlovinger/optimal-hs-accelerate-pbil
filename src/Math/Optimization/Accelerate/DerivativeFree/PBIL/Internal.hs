@@ -154,8 +154,8 @@ defaultMutateHyperparameters n = MutateHyperparameters
   (A.constant $ f n)
   (A.constant $ Probability 0.05)
  where
-  f 0 = Probability 1
-  f x = Probability $ 1 / fromIntegral x
+  f x | x < 1     = Probability 1
+      | otherwise = Probability $ 1 / fromIntegral x
 
 -- | Return 'MutateHyperparameters' if valid.
 mutateHyperparameters
