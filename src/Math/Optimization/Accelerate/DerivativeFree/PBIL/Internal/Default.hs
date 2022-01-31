@@ -31,10 +31,9 @@ initialStepGen = PBILI.initialStepGen 20
 adjustProbabilities
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
-     , A.Num a
+     , A.Fractional a
+     , A.Ord a
      , SFC.Uniform a
-     , Fractional a
-     , Ord a
      , A.Ord b
      )
   => A.Acc (A.Vector (Probability a))
@@ -45,7 +44,7 @@ adjustProbabilities = PBILI.adjustProbabilities 0.1
 
 -- | Randomly adjust probabilities.
 mutate
-  :: (A.Num a, A.Ord a, Fractional a, Ord a, SFC.Uniform a)
+  :: (A.Fractional a, A.Ord a, SFC.Uniform a)
   => Int -- ^ number of bits in each sample
   -> A.Acc (A.Vector (Probability a))
   -> A.Acc SFC.Gen -- ^ same length as probabilities
@@ -56,12 +55,7 @@ mutate n = PBILI.mutate (f n) 0.05 where
 
 -- | Have probabilities converged?
 isConverged
-  :: ( A.Unlift A.Exp (Probability (A.Exp a))
-     , A.Num a
-     , A.Ord a
-     , Fractional a
-     , Ord a
-     )
+  :: (A.Unlift A.Exp (Probability (A.Exp a)), A.Fractional a, A.Ord a)
   => A.Acc (A.Vector (Probability a))
   -> A.Acc (A.Scalar Bool)
 isConverged = PBILI.isConverged 0.75

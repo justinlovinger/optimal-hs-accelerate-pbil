@@ -78,13 +78,12 @@ initialGen n =
 adjustProbabilities
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
-     , A.Num a
+     , A.Fractional a
+     , A.Ord a
      , SFC.Uniform a
-     , Fractional a
-     , Ord a
      , A.Ord b
      )
-  => a -- ^ adjust rate, in range (0,1], clamped
+  => A.Exp a -- ^ adjust rate, in range (0,1], clamped
   -> A.Acc (A.Vector (Probability a))
   -> A.Acc (A.Matrix Bool) -- ^ Rows of samples
   -> A.Acc (A.Vector b) -- ^ Objective values corresponding to samples
@@ -94,7 +93,7 @@ adjustProbabilities ar' ps bss fs = adjustArray
   ps
   (A.map fromBool $ maximumSliceBy fs bss)
  where
-  ar = A.constant $ Probability $ clamp (epsilon, 1) ar'
+  ar = A.lift $ Probability $ clamp (epsilon, 1) ar'
 
   maximumSliceBy
     :: (A.Shape sh, A.Slice sh, A.Elt a, A.Ord b)
@@ -110,9 +109,9 @@ adjustProbabilities ar' ps bss fs = adjustArray
 
 -- | Randomly adjust probabilities.
 mutate
-  :: (A.Num a, A.Ord a, Fractional a, Ord a, SFC.Uniform a)
-  => a -- ^ mutation chance, in range (0,1], clamped
-  -> a -- ^ mutation adjust rate, in range (0,1], clamped
+  :: (A.Fractional a, A.Ord a, SFC.Uniform a)
+  => A.Exp a -- ^ mutation chance, in range (0,1], clamped
+  -> A.Exp a -- ^ mutation adjust rate, in range (0,1], clamped
   -> A.Acc (A.Vector (Probability a))
   -> A.Acc SFC.Gen -- ^ same length as probabilities
   -> (A.Acc (A.Vector (Probability a)), A.Acc SFC.Gen)
@@ -139,21 +138,16 @@ mutate mc' mar' ps g0 =
   , g2
   )
  where
-  mc        = A.constant $ Probability $ clamp (epsilon, 1) mc'
-  mar       = A.constant $ Probability $ clamp (epsilon, 1) mar'
+  mc        = A.lift $ Probability $ clamp (epsilon, 1) mc'
+  mar       = A.lift $ Probability $ clamp (epsilon, 1) mar'
 
   (rs2, g2) = SFC.runRandom g1 SFC.randomVector
   (rs1, g1) = SFC.runRandom g0 SFC.randomVector
 
 -- | Have probabilities converged?
 isConverged
-  :: ( A.Unlift A.Exp (Probability (A.Exp a))
-     , A.Num a
-     , A.Ord a
-     , Fractional a
-     , Ord a
-     )
-  => a -- ^ threshold, in range (0.5,1), clamped
+  :: (A.Unlift A.Exp (Probability (A.Exp a)), A.Fractional a, A.Ord a)
+  => A.Exp a -- ^ threshold, in range (0.5,1), clamped
   -> A.Acc (A.Vector (Probability a))
   -> A.Acc (A.Scalar Bool)
 isConverged ub' = A.all (\x -> x A.< lb A.|| x A.> ub)
@@ -161,7 +155,7 @@ isConverged ub' = A.all (\x -> x A.< lb A.|| x A.> ub)
   lb = A.lift1
     (invert :: (A.Num a) => Probability (A.Exp a) -> Probability (A.Exp a))
     ub
-  ub = A.constant $ Probability $ clamp (0.5 + epsilon, 1 - epsilon) ub'
+  ub = A.lift $ Probability $ clamp (0.5 + epsilon, 1 - epsilon) ub'
 
 clamp :: (Ord a) => (a, a) -> a -> a
 clamp (low, high) a = min high (max a low)

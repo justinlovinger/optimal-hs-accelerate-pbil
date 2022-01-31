@@ -49,11 +49,9 @@ initialState nb = do
 step
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
-     , A.Num a
+     , A.Fractional a
      , A.Ord a
      , SFC.Uniform a
-     , Fractional a
-     , Ord a
      , A.Ord b
      )
   => Int -- ^ number of bits in each sample
@@ -75,10 +73,8 @@ step n f =
 -- | Has 'State' converged?
 isConverged
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
-     , A.Num a
+     , A.Fractional a
      , A.Ord a
-     , Fractional a
-     , Ord a
      , A.Arrays b
      , A.Arrays c
      )

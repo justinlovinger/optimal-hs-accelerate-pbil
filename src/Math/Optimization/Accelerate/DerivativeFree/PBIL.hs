@@ -71,16 +71,14 @@ state ps g1 g2
 step
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
-     , A.Num a
+     , A.Fractional a
      , A.Ord a
      , SFC.Uniform a
-     , Fractional a
-     , Ord a
      , A.Ord b
      )
-  => a -- ^ adjust rate, in range (0,1], clamped
-  -> a -- ^ mutation chance, in range (0,1], clamped
-  -> a -- ^ mutation adjust rate, in range (0,1], clamped
+  => A.Exp a -- ^ adjust rate, in range (0,1], clamped
+  -> A.Exp a -- ^ mutation chance, in range (0,1], clamped
+  -> A.Exp a -- ^ mutation adjust rate, in range (0,1], clamped
   -> (A.Acc (A.Matrix Bool) -> A.Acc (A.Vector b)) -- ^ objective function, maximize
   -> A.Acc
        (PBILI.State (A.Vector (Probability a), SFC.Gen, SFC.Gen))
@@ -102,14 +100,12 @@ step ar mc mar f =
 -- | Has 'State' converged?
 isConverged
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
-     , A.Num a
+     , A.Fractional a
      , A.Ord a
-     , Fractional a
-     , Ord a
      , A.Arrays b
      , A.Arrays c
      )
-  => a -- ^ threshold, in range (0.5,1), clamped
+  => A.Exp a -- ^ threshold, in range (0.5,1), clamped
   -> A.Acc (PBILI.State (A.Vector (Probability a), b, c))
   -> A.Acc (A.Scalar Bool)
 isConverged ub = PBILI.isConverged ub . view _1 . PBILI.fromAccState
