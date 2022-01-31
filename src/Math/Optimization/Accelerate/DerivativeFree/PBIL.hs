@@ -68,7 +68,6 @@ state ps g1 g2
                                                    (SFC.createWith $ A.use g2)
 
 -- | Take 1 PBIL step towards a higher objective value.
--- Hyperparameters are clamped to valid ranges.
 step
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
@@ -79,9 +78,9 @@ step
      , Ord a
      , A.Ord b
      )
-  => a -- ^ adjust rate, in range (0,1]
-  -> a -- ^ mutation chance, in range (0,1]
-  -> a -- ^ mutation adjust rate, in range (0,1]
+  => a -- ^ adjust rate, in range (0,1], clamped
+  -> a -- ^ mutation chance, in range (0,1], clamped
+  -> a -- ^ mutation adjust rate, in range (0,1], clamped
   -> (A.Acc (A.Matrix Bool) -> A.Acc (A.Vector b)) -- ^ objective function, maximize
   -> A.Acc
        (PBILI.State (A.Vector (Probability a), SFC.Gen, SFC.Gen))
@@ -101,7 +100,6 @@ step ar mc mar f =
     where (A.T2 bss g1) = samples ps g0
 
 -- | Has 'State' converged?
--- Hyperparameters are clamped to valid ranges.
 isConverged
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.Num a
@@ -111,7 +109,7 @@ isConverged
      , A.Arrays b
      , A.Arrays c
      )
-  => a -- ^ threshold, in range (0.5,1)
+  => a -- ^ threshold, in range (0.5,1), clamped
   -> A.Acc (PBILI.State (A.Vector (Probability a), b, c))
   -> A.Acc (A.Scalar Bool)
 isConverged ub = PBILI.isConverged ub . view _1 . PBILI.fromAccState

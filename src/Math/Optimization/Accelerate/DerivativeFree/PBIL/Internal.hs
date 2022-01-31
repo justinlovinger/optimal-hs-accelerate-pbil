@@ -75,7 +75,6 @@ initialGen n =
 
 -- | Adjust probabilities towards the best bits
 -- in a set of samples.
--- Hyperparameters are clamped to valid ranges.
 adjustProbabilities
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
@@ -85,7 +84,7 @@ adjustProbabilities
      , Ord a
      , A.Ord b
      )
-  => a -- ^ adjust rate, in range (0,1]
+  => a -- ^ adjust rate, in range (0,1], clamped
   -> A.Acc (A.Vector (Probability a))
   -> A.Acc (A.Matrix Bool) -- ^ Rows of samples
   -> A.Acc (A.Vector b) -- ^ Objective values corresponding to samples
@@ -110,11 +109,10 @@ adjustProbabilities ar' ps bss fs = adjustArray
     (A.indexed xs)
 
 -- | Randomly adjust probabilities.
--- Hyperparameters are clamped to valid ranges.
 mutate
   :: (A.Num a, A.Ord a, Fractional a, Ord a, SFC.Uniform a)
-  => a -- ^ mutation chance, in range (0,1]
-  -> a -- ^ mutation adjust rate, in range (0,1]
+  => a -- ^ mutation chance, in range (0,1], clamped
+  -> a -- ^ mutation adjust rate, in range (0,1], clamped
   -> A.Acc (A.Vector (Probability a))
   -> A.Acc SFC.Gen -- ^ same length as probabilities
   -> (A.Acc (A.Vector (Probability a)), A.Acc SFC.Gen)
@@ -148,7 +146,6 @@ mutate mc' mar' ps g0 =
   (rs1, g1) = SFC.runRandom g0 SFC.randomVector
 
 -- | Have probabilities converged?
--- Hyperparameters are clamped to valid ranges.
 isConverged
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.Num a
@@ -156,7 +153,7 @@ isConverged
      , Fractional a
      , Ord a
      )
-  => a -- ^ threshold, in range (0.5,1)
+  => a -- ^ threshold, in range (0.5,1), clamped
   -> A.Acc (A.Vector (Probability a))
   -> A.Acc (A.Scalar Bool)
 isConverged ub' = A.all (\x -> x A.< lb A.|| x A.> ub)
