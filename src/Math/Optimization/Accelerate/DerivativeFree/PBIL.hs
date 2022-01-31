@@ -68,13 +68,14 @@ state ps g1 g2
                                                    (SFC.createWith $ A.use g2)
 
 -- | Take 1 PBIL step towards a higher objective value.
+-- Hyperparameters are clamped to valid ranges.
 step
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
      , A.Num a
      , A.Ord a
      , SFC.Uniform a
-     , Num a
+     , Fractional a
      , Ord a
      , A.Ord b
      )
@@ -82,30 +83,25 @@ step
   -> a -- ^ mutation chance, in range (0,1]
   -> a -- ^ mutation adjust rate, in range (0,1]
   -> (A.Acc (A.Matrix Bool) -> A.Acc (A.Vector b)) -- ^ objective function, maximize
-  -> Maybe
-       (  A.Acc
-           ( PBILI.State
-               (A.Vector (Probability a), SFC.Gen, SFC.Gen)
-           )
-       -> A.Acc
-            ( PBILI.State
-                (A.Vector (Probability a), SFC.Gen, SFC.Gen)
-            )
+  -> A.Acc
+       (PBILI.State (A.Vector (Probability a), SFC.Gen, SFC.Gen))
+  -> A.Acc
+       ( PBILI.State
+           (A.Vector (Probability a), SFC.Gen, SFC.Gen)
        )
-step ar mc mar f = do
-  adjust <- PBILI.adjustProbabilities ar
-  mutate <- PBILI.mutate mc mar
-  let adjust' ps g0 = (adjust ps bss (f bss), g1)
-        where (A.T2 bss g1) = samples ps g0
-  pure
-    $ A.lift
+step ar mc mar f =
+  A.lift
     . PBILI.State
-    . ( over (lensProduct _1 _3) (uncurry mutate)
+    . ( over (lensProduct _1 _3) (uncurry $ PBILI.mutate mc mar)
       . over (lensProduct _1 _2) (uncurry adjust')
       )
     . PBILI.fromAccState
+ where
+  adjust' ps g0 = (PBILI.adjustProbabilities ar ps bss (f bss), g1)
+    where (A.T2 bss g1) = samples ps g0
 
 -- | Has 'State' converged?
+-- Hyperparameters are clamped to valid ranges.
 isConverged
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.Num a
@@ -116,13 +112,9 @@ isConverged
      , A.Arrays c
      )
   => a -- ^ threshold, in range (0.5,1)
-  -> Maybe
-       (  A.Acc (PBILI.State (A.Vector (Probability a), b, c))
-       -> A.Acc (A.Scalar Bool)
-       )
-isConverged t = do
-  isConverged' <- PBILI.isConverged t
-  pure $ isConverged' . view _1 . PBILI.fromAccState
+  -> A.Acc (PBILI.State (A.Vector (Probability a), b, c))
+  -> A.Acc (A.Scalar Bool)
+isConverged ub = PBILI.isConverged ub . view _1 . PBILI.fromAccState
 
 -- | Finalize 'State' probabilities into bits.
 finalize

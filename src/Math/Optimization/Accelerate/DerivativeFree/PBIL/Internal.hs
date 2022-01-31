@@ -32,7 +32,6 @@ import           Math.Optimization.Accelerate.DerivativeFree.PBIL.Probability.In
                                                 , adjustArray
                                                 , fromBool
                                                 , invert
-                                                , probability
                                                 )
 
 newtype State a = State a
@@ -76,29 +75,27 @@ initialGen n =
 
 -- | Adjust probabilities towards the best bits
 -- in a set of samples.
+-- Hyperparameters are clamped to valid ranges.
 adjustProbabilities
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
      , A.Num a
      , SFC.Uniform a
-     , Num a
+     , Fractional a
      , Ord a
      , A.Ord b
      )
   => a -- ^ adjust rate, in range (0,1]
-  -> Maybe
-       (  A.Acc (A.Vector (Probability a))
-       -> A.Acc (A.Matrix Bool) -- ^ Rows of samples
-       -> A.Acc (A.Vector b) -- ^ Objective values corresponding to samples
-       -> A.Acc (A.Vector (Probability a))
-       )
-adjustProbabilities ar' = fmap adjustProbabilities' mar
+  -> A.Acc (A.Vector (Probability a))
+  -> A.Acc (A.Matrix Bool) -- ^ Rows of samples
+  -> A.Acc (A.Vector b) -- ^ Objective values corresponding to samples
+  -> A.Acc (A.Vector (Probability a))
+adjustProbabilities ar' ps bss fs = adjustArray
+  ar
+  ps
+  (A.map fromBool $ maximumSliceBy fs bss)
  where
-  mar | ar' <= 0  = Nothing
-      | otherwise = A.constant <$> probability ar'
-
-  adjustProbabilities' ar ps bss fs =
-    adjustArray ar ps (A.map fromBool $ maximumSliceBy fs bss)
+  ar = A.constant $ Probability $ clamp (epsilon, 1) ar'
 
   maximumSliceBy
     :: (A.Shape sh, A.Slice sh, A.Elt a, A.Ord b)
@@ -113,52 +110,45 @@ adjustProbabilities ar' = fmap adjustProbabilities' mar
     (A.indexed xs)
 
 -- | Randomly adjust probabilities.
+-- Hyperparameters are clamped to valid ranges.
 mutate
-  :: (A.Num a, A.Ord a, Num a, Ord a, SFC.Uniform a)
+  :: (A.Num a, A.Ord a, Fractional a, Ord a, SFC.Uniform a)
   => a -- ^ mutation chance, in range (0,1]
   -> a -- ^ mutation adjust rate, in range (0,1]
-  -> Maybe
-       (  A.Acc (A.Vector (Probability a))
-       -> A.Acc SFC.Gen -- ^ same length as probabilities
-       -> (A.Acc (A.Vector (Probability a)), A.Acc SFC.Gen)
-       )
-mutate mc' mar' = fmap (uncurry mutate') mmh
- where
-  mmh
-    | mc' <= 0 = Nothing
-    | mar' <= 0 = Nothing
-    | otherwise = do
-      mmc  <- probability mc'
-      mmar <- probability mar'
-      pure (A.constant mmc, A.constant mmar)
-
-  mutate' mc mar ps g0 =
-    ( A.zipWith3
-      (\r1 p r2 -> A.cond
-        (r1 A.<= mc)
-        (A.lift3
-          (adjust :: (A.Num a)
-            => Probability (A.Exp a)
-            -> Probability (A.Exp a)
-            -> Probability (A.Exp a)
-            -> Probability (A.Exp a)
-          )
-          mar
-          p
-          r2
+  -> A.Acc (A.Vector (Probability a))
+  -> A.Acc SFC.Gen -- ^ same length as probabilities
+  -> (A.Acc (A.Vector (Probability a)), A.Acc SFC.Gen)
+mutate mc' mar' ps g0 =
+  ( A.zipWith3
+    (\r1 p r2 -> A.cond
+      (r1 A.<= mc)
+      (A.lift3
+        (adjust :: (A.Num a)
+          => Probability (A.Exp a)
+          -> Probability (A.Exp a)
+          -> Probability (A.Exp a)
+          -> Probability (A.Exp a)
         )
+        mar
         p
+        r2
       )
-      rs1
-      ps
-      rs2
-    , g2
+      p
     )
-   where
-    (rs2, g2) = SFC.runRandom g1 SFC.randomVector
-    (rs1, g1) = SFC.runRandom g0 SFC.randomVector
+    rs1
+    ps
+    rs2
+  , g2
+  )
+ where
+  mc        = A.constant $ Probability $ clamp (epsilon, 1) mc'
+  mar       = A.constant $ Probability $ clamp (epsilon, 1) mar'
+
+  (rs2, g2) = SFC.runRandom g1 SFC.randomVector
+  (rs1, g1) = SFC.runRandom g0 SFC.randomVector
 
 -- | Have probabilities converged?
+-- Hyperparameters are clamped to valid ranges.
 isConverged
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.Num a
@@ -167,15 +157,20 @@ isConverged
      , Ord a
      )
   => a -- ^ threshold, in range (0.5,1)
-  -> Maybe (A.Acc (A.Vector (Probability a)) -> A.Acc (A.Scalar Bool))
-isConverged t | t <= 0.5  = Nothing
-              | t >= 1.0  = Nothing
-              | otherwise = Just $ A.all (\x -> x A.< lb A.|| x A.> ub)
+  -> A.Acc (A.Vector (Probability a))
+  -> A.Acc (A.Scalar Bool)
+isConverged ub' = A.all (\x -> x A.< lb A.|| x A.> ub)
  where
   lb = A.lift1
     (invert :: (A.Num a) => Probability (A.Exp a) -> Probability (A.Exp a))
     ub
-  ub = A.constant $ Probability t
+  ub = A.constant $ Probability $ clamp (0.5 + epsilon, 1 - epsilon) ub'
+
+clamp :: (Ord a) => (a, a) -> a -> a
+clamp (low, high) a = min high (max a low)
+
+epsilon :: Fractional a => a
+epsilon = 1e-10
 
 -- | Finalize probabilities to bits.
 finalize

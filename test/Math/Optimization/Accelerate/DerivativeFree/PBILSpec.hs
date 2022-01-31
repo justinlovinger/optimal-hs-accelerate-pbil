@@ -8,7 +8,6 @@ module Math.Optimization.Accelerate.DerivativeFree.PBILSpec
 import qualified Data.Array.Accelerate         as A
 import qualified Data.Array.Accelerate.Interpreter
                                                as AI
-import           Data.Maybe                     ( fromJust )
 import           Math.Optimization.Accelerate.Binary
                                                 ( reversedBitsToFrac )
 import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL
@@ -28,10 +27,11 @@ spec =
     $ describe "DerivativeFree"
     $ describe "PBIL"
     $ do
-        it "should be able to solve sphere problem" $ fromJust $ do
-          s  <- PBIL.step 0.1 0.1 0.05 sphere'
-          ic <- PBIL.isConverged 0.9
-          pure $ sphereSpec (PBIL.initialState 10) s ic PBIL.finalize
+        it "should be able to solve sphere problem" $ sphereSpec
+          (PBIL.initialState 10)
+          (PBIL.step 0.1 0.1 0.05 sphere')
+          (PBIL.isConverged 0.9)
+          PBIL.finalize
 
         it "should be able to solve sphere problem with default hyperparameters"
           $ sphereSpec PBILD.initialState
