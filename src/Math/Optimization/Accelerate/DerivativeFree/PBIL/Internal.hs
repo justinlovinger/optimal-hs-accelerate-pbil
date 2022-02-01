@@ -157,8 +157,8 @@ isConverged ub' = A.all (\x -> x A.< lb A.|| x A.> ub)
     ub
   ub = A.lift $ Probability $ clamp (0.5 + epsilon, 1 - epsilon) ub'
 
-clamp :: (Ord a) => (a, a) -> a -> a
-clamp (low, high) a = min high (max a low)
+clamp :: (A.Ord a) => (A.Exp a, A.Exp a) -> A.Exp a -> A.Exp a
+clamp (low, high) a = A.min high (A.max a low)
 
 epsilon :: Fractional a => a
 epsilon = 1e-10
