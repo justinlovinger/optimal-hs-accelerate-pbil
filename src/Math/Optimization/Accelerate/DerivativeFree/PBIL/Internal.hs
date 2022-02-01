@@ -1,31 +1,26 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Math.Optimization.Accelerate.DerivativeFree.PBIL.Internal
-  ( State(..)
-  , fromAccState
-  , initialProbabilities
+  ( -- * Initialization
+    initialProbabilities
   , initialStepGen
   , initialMutateGen
+    -- * PBIL Parts
   , adjust
   , mutate
+    -- * Stopping Criteria
   , isConverged
+    -- * From PBIL
   , finalize
   ) where
 
 import qualified Data.Array.Accelerate         as A
-import qualified Data.Array.Accelerate.Smart   as AS
 import qualified Data.Array.Accelerate.System.Random.MWC
                                                as MWC
 import qualified Data.Array.Accelerate.System.Random.SFC
                                                as SFC
-import           GHC.Prim                       ( coerce )
 import           Math.Optimization.Accelerate.DerivativeFree.PBIL.Probability.Internal
                                                 ( Probability(..)
                                                 , adjustArray
@@ -34,23 +29,6 @@ import           Math.Optimization.Accelerate.DerivativeFree.PBIL.Probability.In
                                                 )
 import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL.Probability.Internal
                                                as P
-
-newtype State a = State a
-  deriving (A.Arrays, Show)
-
-instance (A.Lift A.Acc a) => A.Lift A.Acc (State a) where
-  type Plain (State a) = State (A.Plain a)
-  lift =
-    coerce @(a -> A.Acc (A.Plain a)) @(State a -> A.Acc (State (A.Plain a)))
-      A.lift
-
-deriving instance (A.Unlift A.Acc a) => A.Unlift A.Acc (State a)
-
-fromAccState :: A.Acc (State a) -> A.Acc a
-fromAccState = fromState . A.unlift
-
-fromState :: State a -> a
-fromState (State s) = s
 
 -- | Return recommended initial probabilities.
 initialProbabilities
