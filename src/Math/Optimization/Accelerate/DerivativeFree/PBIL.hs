@@ -94,7 +94,7 @@ step ar mc mar f =
       )
     . PBILI.fromAccState
  where
-  adjust' ps g0 = (PBILI.adjustProbabilities ar ps bss (f bss), g1)
+  adjust' ps g0 = (PBILI.adjust ar ps bss (f bss), g1)
     where (A.T2 bss g1) = samples ps g0
 
 -- | Has 'State' converged?

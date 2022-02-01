@@ -13,7 +13,7 @@ module Math.Optimization.Accelerate.DerivativeFree.PBIL.Internal
   , initialProbabilities
   , initialStepGen
   , initialMutateGen
-  , adjustProbabilities
+  , adjust
   , mutate
   , isConverged
   , finalize
@@ -28,11 +28,12 @@ import qualified Data.Array.Accelerate.System.Random.SFC
 import           GHC.Prim                       ( coerce )
 import           Math.Optimization.Accelerate.DerivativeFree.PBIL.Probability.Internal
                                                 ( Probability(..)
-                                                , adjust
                                                 , adjustArray
                                                 , fromBool
                                                 , invert
                                                 )
+import qualified Math.Optimization.Accelerate.DerivativeFree.PBIL.Probability.Internal
+                                               as P
 
 newtype State a = State a
   deriving (A.Arrays, Show)
@@ -75,7 +76,7 @@ initialGen n =
 
 -- | Adjust probabilities towards the best bits
 -- in a set of samples.
-adjustProbabilities
+adjust
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
      , A.Fractional a
@@ -88,10 +89,9 @@ adjustProbabilities
   -> A.Acc (A.Matrix Bool) -- ^ Rows of samples
   -> A.Acc (A.Vector b) -- ^ Objective values corresponding to samples
   -> A.Acc (A.Vector (Probability a))
-adjustProbabilities ar' ps bss fs = adjustArray
-  ar
-  ps
-  (A.map fromBool $ maximumSliceBy fs bss)
+adjust ar' ps bss fs = adjustArray ar
+                                   ps
+                                   (A.map fromBool $ maximumSliceBy fs bss)
  where
   ar = A.lift $ Probability $ clamp (epsilon, 1) ar'
 
@@ -120,7 +120,7 @@ mutate mc' mar' ps g0 =
     (\r1 p r2 -> A.cond
       (r1 A.<= mc)
       (A.lift3
-        (adjust :: (A.Num a)
+        (P.adjust :: (A.Num a)
           => Probability (A.Exp a)
           -> Probability (A.Exp a)
           -> Probability (A.Exp a)

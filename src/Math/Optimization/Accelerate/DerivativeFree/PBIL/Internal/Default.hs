@@ -7,7 +7,7 @@ module Math.Optimization.Accelerate.DerivativeFree.PBIL.Internal.Default
   , PBILI.initialProbabilities
   , initialStepGen
   , PBILI.initialMutateGen
-  , adjustProbabilities
+  , adjust
   , mutate
   , isConverged
   , PBILI.finalize
@@ -28,7 +28,7 @@ initialStepGen = PBILI.initialStepGen 20
 
 -- | Adjust probabilities towards the best bits
 -- in a set of samples.
-adjustProbabilities
+adjust
   :: ( A.Unlift A.Exp (Probability (A.Exp a))
      , A.FromIntegral A.Word8 a
      , A.Fractional a
@@ -40,7 +40,7 @@ adjustProbabilities
   -> A.Acc (A.Matrix Bool) -- ^ Rows of samples
   -> A.Acc (A.Vector b) -- ^ Objective values corresponding to samples
   -> A.Acc (A.Vector (Probability a))
-adjustProbabilities = PBILI.adjustProbabilities 0.1
+adjust = PBILI.adjust 0.1
 
 -- | Randomly adjust probabilities.
 mutate
